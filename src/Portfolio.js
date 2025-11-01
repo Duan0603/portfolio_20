@@ -83,7 +83,7 @@ export default function Portfolio() {
         transition={{ duration: 1, delay: 0.5 }} // Thời gian chuyển đổi 1s, delay 0.5s để đồng bộ với tên
         className="flex flex-col justify-center items-center text-center h-screen px-6 relative z-10"
         style={{
-          backgroundImage: "url(/BacHo2.jpg)", // <-- Đường dẫn đến ảnh của bạn
+          backgroundImage: `url(${process.env.PUBLIC_URL}/BacHo2.jpg)`, // <-- Đường dẫn đến ảnh của bạn
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
