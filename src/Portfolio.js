@@ -101,7 +101,7 @@ export default function Portfolio() {
               "Front-End Developer",
               "ReactJS • TailwindCSS • UX/UI Enthusiast",
               "Sinh viên Kỹ thuật phần mềm tại FPT Đà Nẵng",
-              "Cháu ngoan bác Hồ",
+              "Cháu ngoan Bác Hồ",
               "Sống, học tập và làm việc theo tư tưởng Hồ Chí Minh",
             ]}
             typeSpeed={50}
