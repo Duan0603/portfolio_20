@@ -1,0 +1,490 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Obsidian Atelier — colorway tokens
+   One identity (black vault, steel-edged glass, single amber rake).
+   The colorway token set swaps light/dark without changing identity.
+   ============================================================ */
+:root {
+  /* channel triplets, so Tailwind opacity modifiers work in both colorways */
+  --vault-rgb: 7 8 9; /* #070809 */
+  --vault-2-rgb: 12 14 17; /* #0c0e11 */
+  --obsidian-rgb: 20 23 28; /* #14171c */
+  --obsidian-hi-rgb: 29 34 42; /* #1d222a */
+  --steel-rgb: 151 163 176; /* #97a3b0 */
+  --steel-dim-rgb: 92 102 112; /* #5c6670 */
+  --ink-rgb: 238 241 245; /* #eef1f5 */
+  --amber-rgb: 217 154 76; /* #d99a4c */
+  --amber-bright-rgb: 242 187 110; /* #f2bb6e */
+
+  --vault: rgb(var(--vault-rgb));
+  --vault-2: rgb(var(--vault-2-rgb));
+  --obsidian: rgb(var(--obsidian-rgb));
+  --obsidian-hi: rgb(var(--obsidian-hi-rgb));
+  --steel: rgb(var(--steel-rgb));
+  --steel-dim: rgb(var(--steel-dim-rgb));
+  --ink: rgb(var(--ink-rgb));
+  --amber: rgb(var(--amber-rgb));
+  --amber-bright: rgb(var(--amber-bright-rgb));
+
+  /* derived: hairlines, washes, the text on a lit plate, cast shadow */
+  --line: rgb(var(--steel-rgb) / 0.14);
+  --line-strong: rgb(var(--steel-rgb) / 0.26);
+  --wash: rgb(var(--steel-rgb) / 0.05);
+  --plate-ink: #070809;
+  --cast: rgb(0 0 0 / 0.92);
+
+  --rake: 400px; /* raking-light radius, overridden by JS */
+  --rx: 50%;
+  --ry: 30%;
+
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: "Hanken Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Day colorway — the same obsidian identity under daylight */
+:root[data-colorway="day"] {
+  --vault-rgb: 233 230 224; /* #e9e6e0 */
+  --vault-2-rgb: 241 238 233; /* #f1eee9 */
+  --obsidian-rgb: 224 220 213; /* #e0dcd5 */
+  --obsidian-hi-rgb: 235 232 226; /* #ebe8e2 */
+  --steel-rgb: 74 81 90; /* #4a515a */
+  --steel-dim-rgb: 92 99 107; /* #5c636b */
+  --ink-rgb: 22 24 28; /* #16181c */
+  --amber-rgb: 138 84 18; /* #8a5412 */
+  --amber-bright-rgb: 111 66 12; /* #6f420c */
+
+  --line: rgb(var(--steel-rgb) / 0.2);
+  --line-strong: rgb(var(--steel-rgb) / 0.36);
+  --wash: rgb(var(--steel-rgb) / 0.06);
+  --plate-ink: #fbf4e8;
+  --cast: rgb(70 56 36 / 0.3);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--vault);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Browser surfaces carry the world */
+::selection {
+  background: color-mix(in srgb, var(--amber) 32%, transparent);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+}
+::-webkit-scrollbar-track {
+  background: var(--vault);
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--steel) 35%, var(--vault));
+  border: 3px solid var(--vault);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--steel-dim);
+}
+
+:focus-visible {
+  outline: 1.5px solid var(--amber);
+  outline-offset: 3px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+  font-weight: 600;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ---- Material: machined label ---- */
+.spec-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+/* ---- Material: lit plate (primary action) ---- */
+.plate {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1.5rem;
+  font-weight: 600;
+  color: var(--plate-ink);
+  background: linear-gradient(180deg, var(--amber-bright), var(--amber));
+  border-radius: 2px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--amber-bright) 70%, white) inset,
+    0 14px 30px -12px color-mix(in srgb, var(--amber) 60%, transparent);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.plate:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--amber-bright) 80%, white) inset,
+    0 22px 44px -14px color-mix(in srgb, var(--amber) 75%, transparent);
+}
+
+/* ---- Material: steel plate (secondary action) ---- */
+.plate-steel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.85rem 1.4rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--obsidian-hi), var(--obsidian));
+  border: 1px solid color-mix(in srgb, var(--steel) 22%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--steel) 18%, transparent) inset,
+    0 12px 26px -16px var(--cast);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.5s ease, color 0.5s ease;
+}
+.plate-steel:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  color: var(--amber-bright);
+}
+
+/* ---- Open floor: work is mounted straight on the vault, no boxes ----
+   A row is a hairline and the space under it. The rake wakes on approach:
+   the hairline catches amber where the pointer is and a soft pool of light
+   follows it across the row. */
+.lit-row {
+  --gx: 50%;
+  --gy: 0px;
+  position: relative;
+  isolation: isolate;
+  border-top: 1px solid var(--line);
+}
+.lit-row::before {
+  content: "";
+  position: absolute;
+  inset: -1px 0 auto 0;
+  height: 1px;
+  background: radial-gradient(
+    280px circle at var(--gx) 0,
+    var(--amber-bright),
+    transparent 72%
+  );
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.lit-row::after {
+  content: "";
+  position: absolute;
+  inset: 0 -3rem;
+  z-index: -1;
+  background: radial-gradient(
+    440px circle at calc(var(--gx) + 3rem) var(--gy),
+    color-mix(in srgb, var(--amber) 10%, transparent),
+    transparent 64%
+  );
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent),
+    linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent),
+    linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  mask-composite: intersect;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.lit-row:hover::before,
+.lit-row:hover::after,
+.lit-row:focus-within::before {
+  opacity: 1;
+}
+.lit-title {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lit-row:hover .lit-title {
+  transform: translateX(0.4rem);
+}
+
+/* tech tags as one machined run of text, not a row of chips */
+.tag-run {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+.tag-run li:not(:last-child)::after {
+  content: "/";
+  margin: 0 0.7em;
+  color: var(--steel-dim);
+}
+
+/* ---- Skill layers: each one has a slab of the monolith docked beside it ---- */
+.skill-layer h3 {
+  color: var(--ink);
+  transition: color 0.5s ease;
+}
+.skill-layer[data-active="true"] h3 {
+  color: var(--amber-bright);
+}
+.skill {
+  padding: 0.5rem 0 0.4rem;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: none;
+  color: var(--steel);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.skill:hover {
+  color: var(--ink);
+  border-bottom-color: var(--steel);
+}
+.skill[aria-pressed="true"] {
+  color: var(--amber-bright);
+  border-bottom-color: var(--amber);
+}
+.skill-note {
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .skill-note {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+}
+
+/* ---- Reveal choreography ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  filter: blur(6px);
+}
+.reveal.lit {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  .lit-title,
+  .skill-note {
+    transition: none;
+  }
+  .lit-row:hover .lit-title {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   Atelier stage — fixed WebGL backdrop + raking vignette
+   ============================================================ */
+.atelier-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.atelier-canvas {
+  position: absolute !important;
+  inset: 0;
+}
+/* CSS vault: base ground + amber rake that tracks the cursor.
+   Doubles as the no-WebGL fallback so the page is never flat-black. */
+.atelier-vault {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      620px circle at var(--rx) var(--ry),
+      color-mix(in srgb, var(--amber) 16%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(130% 90% at 18% 8%, var(--vault-2), var(--vault) 60%);
+}
+/* Material imperfection tied to the rake, not a global filter:
+   fine dust/grain only surfaces where the cursor-driven light falls. */
+.atelier-grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.9;
+  -webkit-mask-image: radial-gradient(
+    560px circle at var(--rx) var(--ry),
+    #000 0%,
+    rgba(0, 0, 0, 0.25) 45%,
+    transparent 66%
+  );
+  mask-image: radial-gradient(
+    560px circle at var(--rx) var(--ry),
+    #000 0%,
+    rgba(0, 0, 0, 0.25) 45%,
+    transparent 66%
+  );
+}
+
+.section-anchor {
+  scroll-margin-top: 6rem;
+}
+
+/* Keep hero copy legible where it overlays the lit monolith */
+.hero-copy h1,
+.hero-copy > p {
+  text-shadow: 0 2px 34px color-mix(in srgb, var(--vault) 82%, transparent),
+    0 1px 3px color-mix(in srgb, var(--vault) 70%, transparent);
+}
+
+/* Day: ink text can cross the black core, so it carries a tight pale halo */
+:root[data-colorway="day"] .hero-copy h1,
+:root[data-colorway="day"] .hero-copy > p {
+  text-shadow: 0 0 2px var(--vault), 0 0 5px var(--vault), 0 0 10px var(--vault),
+    0 0 18px var(--vault), 0 0 30px var(--vault);
+}
+
+/* Nav gains a machined glass scrim once the page scrolls */
+.nav-scrolled {
+  background: color-mix(in srgb, var(--vault) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  border-bottom: 1px solid color-mix(in srgb, var(--steel) 12%, transparent);
+  box-shadow: 0 10px 30px -22px var(--cast);
+}
+
+/* hairline divider in the world's materials */
+.hairline {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--steel) 20%, transparent),
+    transparent
+  );
+  border: 0;
+}
+
+/* On narrow screens the hero copy sits over the 3D core: give it a soft
+   ground in the vault colour so it reads in either colorway. */
+@media (max-width: 640px) {
+  .hero-copy {
+    position: relative;
+  }
+  .hero-copy::before {
+    content: "";
+    position: absolute;
+    inset: -2.5rem -1.5rem;
+    z-index: -1;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--vault) 78%, transparent),
+      color-mix(in srgb, var(--vault) 55%, transparent) 70%,
+      transparent
+    );
+    pointer-events: none;
+  }
+  /* ink on the black core needs a near-solid ground in daylight */
+  :root[data-colorway="day"] .hero-copy::before {
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--vault) 94%, transparent),
+      color-mix(in srgb, var(--vault) 88%, transparent) 78%,
+      transparent
+    );
+  }
+}
+
+/* ---- Preference controls (language, appearance) ---- */
+.pref-seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--wash);
+}
+.pref-seg button {
+  min-width: 2rem;
+  padding: 0.3rem 0.45rem;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  color: var(--steel);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+.pref-seg button:hover {
+  color: var(--ink);
+}
+.pref-seg button[aria-pressed="true"] {
+  background: var(--obsidian-hi);
+  color: var(--amber-bright);
+  box-shadow: 0 1px 0 var(--line) inset, 0 4px 10px -6px var(--cast);
+}
+.pref-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--wash);
+  color: var(--steel);
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.pref-icon:hover {
+  color: var(--amber-bright);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
