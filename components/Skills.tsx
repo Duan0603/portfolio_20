@@ -6,10 +6,8 @@ import { ui } from "@/lib/i18n";
 import { skillGroups } from "@/lib/data";
 import { skillMeta } from "@/lib/skillMeta";
 import { stage } from "@/lib/stage";
-import Reveal from "./Reveal";
 
 // Top of the stack first: what the visitor touches, down to what it all runs on.
-// Each layer has one slab of the monolith docked beside it (see Atelier).
 const order = ["Frontend", "Backend", "Database", "AI / IoT", "Ngôn ngữ", "Công cụ & DevOps"];
 const rank = (title: string) => {
   const i = order.indexOf(title);
@@ -17,6 +15,11 @@ const rank = (title: string) => {
 };
 const layers = [...skillGroups].sort((a, b) => rank(a.title) - rank(b.title));
 
+/**
+ * The skills face is cut into strips, one per slab of the monolith: a heading
+ * strip, then one per layer of the stack. On this face the column splits along
+ * the same lines (see Atelier), so each layer reads as its own slab.
+ */
 export default function Skills() {
   const { lang } = usePrefs();
   const t = ui[lang];
@@ -26,93 +29,60 @@ export default function Skills() {
 
   const pickedLayer = picked ? layers.findIndex((g) => g.items.includes(picked)) : -1;
   const active = hovered >= 0 ? hovered : pickedLayer;
+  const meta = picked ? skillMeta[picked] : null;
 
+  // strip 0 is the heading, so layer i sits on slab i + 1
   useEffect(() => {
-    stage.active = active;
+    stage.active = active < 0 ? -1 : active + 1;
     return () => {
       stage.active = -1;
     };
   }, [active]);
 
   return (
-    <section id="skills" className="section-anchor mx-auto max-w-6xl px-6 py-24">
-      <Reveal>
-        <div className="mb-4 flex items-baseline gap-4">
-          <span className="font-mono text-sm text-amber">03</span>
-          <h2 className="font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            {t.skills.title}
-          </h2>
+    <div className="strips" onPointerLeave={() => setHovered(-1)}>
+      <div className="strip">
+        <h2 className="f-row-lg font-display font-semibold text-ink">{t.skills.title}</h2>
+        <div className="f-note text-steel" aria-live="polite">
+          {meta ? (
+            <p key={picked} className="skill-note">
+              <span className="text-ink">{meta.highlight[lang]}</span>
+              <span className="mt-0.5 block font-mono text-[0.92em]">
+                {t.skills.usedIn}
+                <span className="text-amber-bright">{meta.projects[lang]}</span>
+              </span>
+            </p>
+          ) : (
+            <p className="line-clamp-3">{t.skills.intro}</p>
+          )}
         </div>
-        <p className="mb-12 max-w-2xl text-steel">{t.skills.intro}</p>
-      </Reveal>
-
-      <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-x-4 sm:grid-cols-[minmax(0,1fr)_9rem] lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)] lg:gap-x-12">
-        <ol
-          className="border-b border-line"
-          onPointerLeave={() => setHovered(-1)}
-        >
-          {layers.map((group, i) => {
-            const meta = pickedLayer === i && picked ? skillMeta[picked] : null;
-            return (
-              <li
-                key={group.title}
-                data-active={active === i}
-                className="skill-layer grid gap-x-8 gap-y-3 border-t border-line py-6 md:grid-cols-[11rem_minmax(0,1fr)]"
-                onPointerEnter={() => setHovered(i)}
-                onFocus={() => setHovered(i)}
-              >
-                <h3
-                  ref={(el) => {
-                    stage.rows[i] = el;
-                  }}
-                  className="font-display text-xl font-semibold sm:text-2xl"
-                >
-                  {group.label[lang]}
-                </h3>
-
-                <div>
-                  <ul className="flex flex-wrap gap-x-5 gap-y-1">
-                    {group.items.map((item) => (
-                      <li key={item}>
-                        <button
-                          type="button"
-                          className="skill"
-                          aria-pressed={picked === item}
-                          onClick={() => setPicked((p) => (p === item ? null : item))}
-                        >
-                          {item}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div aria-live="polite">
-                    {meta && (
-                      <div key={picked} className="skill-note mt-4 max-w-xl">
-                        <p className="text-sm leading-relaxed text-ink/90">
-                          {meta.highlight[lang]}
-                        </p>
-                        <p className="mt-1.5 font-mono text-xs leading-relaxed text-steel">
-                          {t.skills.usedIn}
-                          <span className="text-amber-bright">{meta.projects[lang]}</span>
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-
-        {/* the split monolith docks here, one slab level with each layer */}
-        <div
-          aria-hidden="true"
-          ref={(el) => {
-            stage.anchor = el;
-          }}
-        />
       </div>
-    </section>
+
+      {layers.map((group, i) => (
+        <div
+          key={group.title}
+          className="strip"
+          data-active={active === i || undefined}
+          onPointerEnter={() => setHovered(i)}
+          onFocus={() => setHovered(i)}
+        >
+          <h3 className="f-row font-display font-semibold">{group.label[lang]}</h3>
+          <ul className="flex flex-wrap gap-x-[1.1em] gap-y-0">
+            {group.items.map((item) => (
+              <li key={item}>
+                <button
+                  type="button"
+                  className="skill"
+                  aria-pressed={picked === item}
+                  onClick={() => setPicked((p) => (p === item ? null : item))}
+                >
+                  {item}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -8,6 +8,7 @@ export const ui = {
     langLabel: "Ngôn ngữ",
     toDay: "Chuyển sang giao diện sáng",
     toNight: "Chuyển sang giao diện tối",
+    rail: { label: "Các chương", top: "Mở đầu" },
     hero: {
       cta: "Xem dự án",
       meta: "Mở cơ hội full-time & freelance",
@@ -30,7 +31,7 @@ export const ui = {
     skills: {
       title: "Kỹ năng",
       intro:
-        "Sáu tầng của một stack hoàn chỉnh, từ giao diện web xuống tới mô hình AI thị giác máy tính và phần cứng edge. Chọn một kỹ năng để xem nó đã được dùng vào việc gì.",
+        "Sáu tầng của một stack, từ giao diện web tới AI thị giác máy tính và phần cứng edge. Chọn một kỹ năng để xem nó đã dùng vào việc gì.",
       usedIn: "Dự án áp dụng: ",
     },
     contact: {
@@ -47,6 +48,7 @@ export const ui = {
     langLabel: "Language",
     toDay: "Switch to light appearance",
     toNight: "Switch to dark appearance",
+    rail: { label: "Chapters", top: "Start" },
     hero: {
       cta: "View work",
       meta: "Open to full-time & freelance",
@@ -69,7 +71,7 @@ export const ui = {
     skills: {
       title: "Skills",
       intro:
-        "Six layers of one complete stack, from the web interface down to computer-vision AI models and edge hardware. Pick a skill to see what it was used for.",
+        "Six layers of one stack, from the web interface to computer-vision AI and edge hardware. Pick a skill to see what it was used for.",
       usedIn: "Used in: ",
     },
     contact: {

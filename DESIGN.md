@@ -105,7 +105,7 @@ Legibility is the floor beneath the drama: secondary text is tinted steel-blue r
 - Near-black volcanic ground with steel-edged obsidian glass surfaces
 - A single warm amber used as raking light, never as a fill
 - Machined, architectural type with a true-mono voice reserved for data and labels
-- Numbered, choreographed reveals rather than a flat grid of cards
+- The whole page is one turning column; chapters are its faces, never a grid of cards
 - One colorway token set that swaps day/night (nav toggle) while the obsidian identity holds; the interface is bilingual VI/EN
 
 ## Colors
@@ -152,11 +152,13 @@ A monochrome near-black vault graded from steel-blue neutrals, lit by one warm a
 
 ## Layout
 
-A single centered column, `max-width: 72rem` (`max-w-6xl`), with `1.5rem` (`px-6`) gutters throughout. Sections are vertically generous — `py-24` to `py-28` (6–7rem) — giving each exhibit room to stand alone. The hero fills `min-height: 100svh` and leads with the live WebGL monolith behind left-aligned copy capped at `max-w-2xl`.
+The page is one object: **the Walk**. A single obsidian column stands in a pinned viewport and each chapter is one of its faces — name, one face per featured project, the repo index, profile, skills, contact (eight faces today; the count follows `lib/data.ts`). Scrolling turns the column: it holds flat on a face, then rotates through the middle of each stop. The front face is always square to the viewer at 1:1 scale, so type stays sharp; the faces ahead and behind show as dim ghosts on the angled sides.
 
-Featured projects stack as full-width exhibits in an asymmetric two-column split (`1fr 1.15fr`) that collapses to one column below `lg`; the secondary GitHub repos drop into a 1→2→3 column grid (`sm:grid-cols-2 lg:grid-cols-3`). Spacing rhythm runs on a ~0.25rem base expressed through Tailwind steps (gaps of `gap-2`/`gap-3`/`gap-5`/`gap-8`). Section anchors carry `scroll-margin-top: 6rem` so the fixed nav never clips a jumped-to heading.
+Faces are real HTML placed with CSS 3D (`components/Walk.tsx`); the obsidian is WebGL (`components/Atelier.tsx`). The walk measures the CSS prism in pixels and publishes it through `lib/stage.ts`, and the scene builds the column to the same numbers under the same perspective (`FOV` 42°, camera dead centre). Never move the camera or add a tilt to one side only — the two must share one view.
 
-The live atelier is a `position: fixed` z-0 backdrop; content rides above it on a `.content-ground` that fades the scene out over the first `16vh` of scroll.
+A face is `min(58vw, 52rem)` wide (`min(90vw, 24rem)` below 700px) and `100svh − 11.75rem` tall. Content is left-aligned, padded `clamp(1.25rem, 6.2cqmin, 3.5rem)`, and type is sized from the face with container units so a chapter always fits it. A rail (right edge on desktop, bottom centre on mobile) shows the current face and turns the column on click; the nav anchors jump to the same stops.
+
+**Fallback.** Without WebGL, with `prefers-reduced-motion`, with no JS, or on a viewport under 640px tall, the same markup is a plain stacked page: one centred 46rem column, faces separated by hairlines.
 
 ## Elevation & Depth
 
@@ -191,32 +193,32 @@ Borders are hairlines built from `color-mix` of steel at very low alpha (10–22
 - **Style:** Mono, ~0.72–0.8rem, 2px radius. Two variants observed: a bordered chip (`border white/5`, `bg white/[0.02]`, steel or ink/90 text) for featured and skill tags, and a borderless `#tag` in steel-dim for the compact repo cards.
 - **State:** Static, non-interactive — labels, not controls.
 
-### Cards / Containers (`.exhibit`)
-- **Corner Style:** 3px radius.
-- **Background:** Diagonal obsidian gradient (`155deg`, obsidian-hi → obsidian → vault-2).
-- **Shadow Strategy:** Exhibit cast (see Elevation) with an inset steel top-light; a gradient steel/amber top edge rises from 0.5 → 1 opacity on hover.
-- **Border:** 1px steel at 12% alpha; internal dividers use `white/[0.06]`.
-- **Internal Padding:** `1.5rem` compact (`p-6`) to `2.5rem` featured (`p-10`).
+### Faces and rows (there are no cards)
+- **No boxes.** Content sits directly on the obsidian. Nothing has its own background, border box, or shadow; the block is the only container.
+- **Rows** are a hairline and the space under it (`border-line`). `.lit-row` adds the rake response: an amber hotspot on the hairline and a soft pool of light that follow the pointer.
+- **Tags** run as one line of mono text separated by slashes (`.tag-run`), not as chips.
+- **Skills face** is cut into seven strips (`.strip`): a heading strip and one per skill group. On this face the column splits into slabs along the same lines and amber light shows in the seams; the seam under the hovered or selected group brightens. Selecting a skill shows what it was used for in the heading strip.
 
 ### Navigation
 - Fixed, transparent at rest; gains `.nav-scrolled` (vault scrim at 72% + `blur(14px) saturate(1.1)` + hairline bottom border) after 40px of scroll, transitioning over 500ms. Links are steel mono-weight text that brighten to ink on hover; the mobile compact link is amber ("LIÊN HỆ ↗"). The brand mark pairs a tiny amber gradient dot with the name in display.
 
-### Signature: The Live Atelier & Tilt Exhibit
-The `.atelier-stage` is a fixed WebGL backdrop (obsidian monolith + suspended shards + cursor-tracked amber spotlight) with a CSS-vault fallback (`radial-gradient` rake + grain masked to the cursor) so the page is never flat-black without WebGL. `.tilt` gives featured exhibits a pointer-driven 3D rotation (`perspective(1100px)`, max 3–5°) with an amber sheen tracking the pointer; it flattens entirely under `prefers-reduced-motion`. `.reveal` choreographs entrance (opacity + 26px rise + 6px blur → cleared over 0.9s) staggered by index.
+### Signature: The Walk
+One obsidian column carries the whole site (see Layout). `.atelier-stage` is the fixed WebGL backdrop — the column, dust in the light, offcut shards either side — with a CSS-vault fallback (`radial-gradient` rake + grain masked to the cursor). The amber rake is a spotlight that sweeps the front face with the pointer; a cool steel light runs down the right-hand faces. In the day colorway the block becomes pale honed stone so ink keeps its contrast. The turn is the one authored motion on the page: no per-section entrance animations.
 
 ## Do's and Don'ts
 
 ### Do:
 - **Do** spend amber only as light — a lit plate, a catching edge, an index number, a focus ring. One accent hue, always.
 - **Do** tint secondary text steel-blue (#97a3b0 / #5c6670), never pure gray.
-- **Do** build depth from offset+blur cast shadows plus a 1px inset lit bevel, with corners at 2–3px.
+- **Do** keep content on the block itself: hairline rows, no cards. Depth belongs to the column and to the plates (buttons), with corners at 2px.
 - **Do** reserve JetBrains Mono for real data, specs, index numbers, and wayfinding marks.
 - **Do** tie material imperfection and light response to interaction (cursor/hover/proximity), and honor `prefers-reduced-motion` with static fallbacks.
 - **Do** ease every motion with `cubic-bezier(0.16, 1, 0.3, 1)` (exponential ease-out).
 
 ### Don't:
 - **Don't** introduce a second accent color, neon glow rings, or a dark-to-purple gradient ground.
-- **Don't** set an eyebrow/kicker label above a heading — introduce sections with the mono index number beside the title instead.
+- **Don't** set an eyebrow/kicker label above a heading. Position in the sequence is shown by the rail, not by numbers on the faces.
+- **Don't** wrap content in cards or panels, and don't add entrance animations to individual sections — the turn of the column is the motion.
 - **Don't** fill broad surfaces with amber or set prose/headings in mono.
 - **Don't** apply grain or imperfection as a global always-on filter; it surfaces only where the rake falls.
 - **Don't** use soft/pill radii on content surfaces (the 999px round is scrollbar-only) — the silhouette is a machined slab.
