@@ -6,6 +6,7 @@ import { usePrefs } from "@/lib/prefs";
 import { driveTo, game, getActive, resetRover, stations, subscribe } from "./game";
 import { copy, stationShort, stationTitle } from "./copy";
 import Panel from "./Panel";
+import { vehicleById, vehicles } from "./vehicles";
 import s from "./world.module.css";
 
 const World = dynamic(() => import("./World"), { ssr: false });
@@ -47,6 +48,29 @@ export default function Play() {
   const [ready, setReady] = useState(false);
   const active = useSyncExternalStore(subscribe, getActive, () => 0);
   const [dismissed, setDismissed] = useState(-1);
+  const [vehicle, setVehicle] = useState(vehicles[0]);
+  const [garage, setGarage] = useState(false);
+
+  // the visitor's last choice of vehicle comes back with them
+  useEffect(() => {
+    try {
+      setVehicle(vehicleById(window.localStorage.getItem("vehicle")));
+    } catch {
+      /* storage unavailable: the default car it is */
+    }
+  }, []);
+  useEffect(() => {
+    game.pace = vehicle.pace;
+  }, [vehicle]);
+  const pick = (id: string) => {
+    setVehicle(vehicleById(id));
+    setGarage(false);
+    try {
+      window.localStorage.setItem("vehicle", id);
+    } catch {
+      /* the choice just lasts for this visit */
+    }
+  };
   const last = useRef(0);
   if (active >= 0) last.current = active;
 
@@ -149,7 +173,7 @@ export default function Play() {
     <div className={s.shell} data-mode={mode ?? "world"}>
       {world && ready && (
         <div className={s.canvas} aria-hidden="true">
-          <World lang={lang} day={day} />
+          <World lang={lang} day={day} vehicle={vehicle} />
         </div>
       )}
 
@@ -247,6 +271,43 @@ export default function Play() {
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 3l5 5-5 5" />
               </svg>
+            </button>
+          </div>
+
+          <div className={s.garage}>
+            {garage && (
+              <ul className={s.garageMenu} role="menu" aria-label={t.garage}>
+                {vehicles.map((v) => (
+                  <li key={v.id} role="none">
+                    <button type="button" role="menuitemradio" aria-checked={vehicle.id === v.id} onClick={() => pick(v.id)}>
+                      <span className={s.swatch} style={{ background: v.paint }} />
+                      {v.name[lang]}
+                    </button>
+                  </li>
+                ))}
+                <li className={s.credit} role="none">
+                  {t.credit}{" "}
+                  {vehicles
+                    .filter((v) => v.credit)
+                    .map((v, i) => (
+                      <span key={v.id}>
+                        {i > 0 && ", "}
+                        <a href={v.credit!.url} target="_blank" rel="noopener noreferrer" title={v.credit!.title}>
+                          {v.credit!.author}
+                        </a>
+                      </span>
+                    ))}
+                </li>
+              </ul>
+            )}
+            <button type="button" className={s.garageBtn} aria-haspopup="menu" aria-expanded={garage} onClick={() => setGarage((g) => !g)}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2.5 12.5v-2l2-1 2.2-3.2h5.6l3 3.2 2.2.8v2.2h-1.6" />
+                <path d="M7.4 12.5h5.2" />
+                <circle cx="5.6" cy="12.6" r="1.7" />
+                <circle cx="14.4" cy="12.6" r="1.7" />
+              </svg>
+              <span>{t.garage}</span>
             </button>
           </div>
 

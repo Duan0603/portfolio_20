@@ -24,6 +24,15 @@ export const education = {
   gpa: "3.2 / 4.0",
 };
 
+export const highSchool = {
+  school: {
+    vi: "THPT chuyên Võ Nguyên Giáp",
+    en: "Vo Nguyen Giap High School for the Gifted",
+  } as L,
+  major: { vi: "Lớp chuyên Tin", en: "Specialised Informatics class" } as L,
+  period: "2020 - 2023",
+};
+
 export const certifications = [
   "Google Project Management: Professional Certificate",
   "Front-End Developer Professional Certificate",
@@ -149,16 +158,6 @@ export const projects: Project[] = [
     tags: ["JavaScript", "Web App"],
     repo: "https://github.com/Duan0603/CourtMate",
     demo: "https://web-eight-self-61.vercel.app",
-  },
-  {
-    name: "CourtMate Web",
-    description: {
-      vi: "Phiên bản web của CourtMate viết bằng TypeScript, triển khai trên Vercel.",
-      en: "The web version of CourtMate, written in TypeScript and deployed on Vercel.",
-    },
-    tags: ["TypeScript", "Vercel"],
-    repo: "https://github.com/Duan0603/courtmate-web",
-    demo: "https://courtmate-web.vercel.app",
   },
   {
     name: "TerraWatch",

@@ -300,6 +300,15 @@
   line-height: 1.3;
   color: var(--ink);
 }
+/* a second entry under the same label */
+.next {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.pair .meta {
+  margin-top: 0.3rem;
+}
 .quiet {
   margin: 0.1rem 0 0;
   color: var(--steel);
@@ -672,6 +681,120 @@
   }
 }
 
+/* ---- Garage: pick what to drive ---- */
+.garage {
+  position: absolute;
+  z-index: 26;
+  top: 3.7rem;
+  right: 0.6rem;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+.garageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--obsidian) 92%, transparent);
+  box-shadow: 0 1px 0 var(--line) inset, 0 20px 40px -22px var(--cast);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.garageBtn:hover,
+.garageBtn[aria-expanded="true"] {
+  color: var(--amber-bright);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.garageBtn span {
+  display: none;
+}
+.garageMenu {
+  min-width: 11rem;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: linear-gradient(165deg, var(--obsidian-hi), var(--obsidian));
+  box-shadow: 0 24px 48px -24px var(--cast);
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .garageMenu {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+.garageMenu button {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--steel);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+.garageMenu button:hover {
+  color: var(--ink);
+  background: var(--wash);
+}
+.garageMenu button[aria-checked="true"] {
+  color: var(--amber-bright);
+  background: var(--obsidian-hi);
+}
+.credit {
+  max-width: 15rem;
+  margin-top: 0.3rem;
+  padding: 0.6rem 0.7rem 0.4rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--steel);
+}
+.credit a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--line-strong);
+}
+.credit a:hover {
+  color: var(--amber-bright);
+}
+.swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex-shrink: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 1px;
+}
+@media (min-width: 900px) {
+  .garage {
+    top: auto;
+    right: 1.25rem;
+    bottom: 0.9rem;
+    flex-direction: column;
+  }
+  .garageBtn span {
+    display: inline;
+  }
+}
+
 /* ---- Read as a page ---- */
 .page {
   max-width: 44rem;
@@ -692,6 +815,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .panel,
+  .garageMenu,
   .plate,
   .plateSteel {
     transition: none;

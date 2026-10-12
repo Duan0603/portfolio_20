@@ -95,6 +95,8 @@ export const game = {
   /** front wheels, -1 hard left to 1 hard right */
   steer: 0,
   braking: false,
+  /** the chosen vehicle's top speed and pull, relative to the rover */
+  pace: 1,
 
   // what the driver is asking for
   throttle: 0,
@@ -173,7 +175,7 @@ export function step(dt: number) {
   let throttle = g.throttle;
   let wheel = g.wheel;
   let handbrake = g.handbrake;
-  let top = g.boost ? TOP_BOOST : TOP;
+  let top = (g.boost ? TOP_BOOST : TOP) * g.pace;
 
   if (throttle || wheel || handbrake) {
     g.target = null; // taking the wheel cancels the autopilot
@@ -237,7 +239,7 @@ export function step(dt: number) {
   // engine and brakes
   g.braking = handbrake || (throttle < 0 && forward > 0.5);
   if (throttle > 0) {
-    forward += (forward < 0 ? 26 : 15) * throttle * dt;
+    forward += (forward < 0 ? 26 : 15 * g.pace) * throttle * dt;
   } else if (throttle < 0) {
     forward += (forward > 0 ? 28 : 9) * throttle * dt;
   }

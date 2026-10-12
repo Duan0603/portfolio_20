@@ -1,6 +1,6 @@
 "use client";
 
-import { certifications, education, profile, skillGroups, type Lang } from "@/lib/data";
+import { certifications, education, highSchool, profile, skillGroups, type Lang } from "@/lib/data";
 import { driveTo, rest, stations, type Station } from "./game";
 import { copy, stationTitle } from "./copy";
 import s from "./world.module.css";
@@ -172,6 +172,9 @@ export default function Panel({
             <p className={s.meta}>
               GPA {education.gpa} / {education.period[lang]}
             </p>
+            <p className={`${s.strong} ${s.next}`}>{highSchool.school[lang]}</p>
+            <p className={s.quiet}>{highSchool.major[lang]}</p>
+            <p className={s.meta}>{highSchool.period}</p>
           </section>
           <section>
             <h3 className={s.label}>{t.certs}</h3>

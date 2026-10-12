@@ -20,6 +20,7 @@ Full-Stack Developer với hơn 1 năm kinh nghiệm, thành thạo JavaScript/T
 ## Học vấn
 
 - **FPT University** — Software Engineer (2023 – nay)
+- **THPT chuyên Võ Nguyên Giáp** — Lớp chuyên Tin (2020 – 2023)
 - GPA: **3.2 / 4.0**
 
 ## Chứng chỉ
@@ -66,7 +67,6 @@ Nền tảng huấn luyện gym online với tính năng AI Trainer. · [GitHub]
 | Dự án | Mô tả | Công nghệ | Link |
 |-------|-------|-----------|------|
 | **CourtMate** | Ứng dụng web đặt sân thể thao | JavaScript | [Repo](https://github.com/Duan0603/CourtMate) · [Demo](https://web-eight-self-61.vercel.app) |
-| **courtmate-web** | Phiên bản web của CourtMate | TypeScript | [Repo](https://github.com/Duan0603/courtmate-web) · [Demo](https://courtmate-web.vercel.app) |
 | **TerraWatch** | Web giám sát dữ liệu môi trường | HTML | [Repo](https://github.com/Duan0603/TerraWatch) |
 | **SDN_EnglishLearning** | Ứng dụng học tiếng Anh | Python | [Repo](https://github.com/Duan0603/SDN_EnglishLearning) |
 | **ResourceAllocationManagementSystem** | Quản lý & phân bổ tài nguyên | Python | [Repo](https://github.com/Duan0603/ResourceAllocationManagementSystem) |

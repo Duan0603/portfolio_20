@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { Environment, Lightformer, RoundedBox } from "@react-three/drei";
+import { Environment, Lightformer, RoundedBox, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { Lang } from "@/lib/data";
 import { profile } from "@/lib/data";
@@ -18,6 +18,7 @@ import {
   type Station,
 } from "./game";
 import { stationChips, stationNote, stationTitle } from "./copy";
+import type { Vehicle } from "./vehicles";
 
 const AMBER = "#f2bb6e";
 /* An exhibit board: landscape, leaning back so it meets the camera square-on. */
@@ -605,15 +606,239 @@ function Skids({ day }: { day: boolean }) {
   );
 }
 
-/* ---- The rover: a small vision robot carrying the hall's one warm light ---- */
+/* ---- Cars: a side profile pushed through the width of the car, with a dark canopy on top ---- */
 
-function Rover() {
+type Profile = (s: THREE.Shape) => void;
+const profiles: Record<string, { body: Profile; cabin: Profile; wing?: boolean }> = {
+  // all edges and one long wedge from nose to roof
+  lamborghini: {
+    wing: true,
+    body: (s) => {
+      s.moveTo(-1.15, 0.2);
+      s.lineTo(1.12, 0.2);
+      s.lineTo(1.2, 0.3);
+      s.lineTo(0.38, 0.5);
+      s.lineTo(-0.72, 0.6);
+      s.lineTo(-1.17, 0.56);
+    },
+    cabin: (s) => {
+      s.moveTo(0.42, 0.48);
+      s.lineTo(-0.08, 0.82);
+      s.lineTo(-0.52, 0.8);
+      s.lineTo(-0.98, 0.56);
+    },
+  },
+  // round nose, one arc of roof falling all the way to the tail
+  porsche: {
+    body: (s) => {
+      s.moveTo(-1.12, 0.22);
+      s.lineTo(1.08, 0.22);
+      s.quadraticCurveTo(1.22, 0.4, 0.98, 0.52);
+      s.lineTo(0.4, 0.6);
+      s.lineTo(-0.6, 0.62);
+      s.quadraticCurveTo(-1.12, 0.62, -1.16, 0.38);
+    },
+    cabin: (s) => {
+      s.moveTo(0.46, 0.57);
+      s.quadraticCurveTo(0.12, 0.98, -0.25, 0.9);
+      s.quadraticCurveTo(-0.8, 0.8, -1.04, 0.52);
+    },
+  },
+  // long low nose, cabin set back, haunches rising to a small ducktail
+  ferrari: {
+    body: (s) => {
+      s.moveTo(-1.15, 0.2);
+      s.lineTo(1.14, 0.2);
+      s.lineTo(1.22, 0.31);
+      s.quadraticCurveTo(0.8, 0.5, 0.42, 0.5);
+      s.quadraticCurveTo(0, 0.5, -0.3, 0.58);
+      s.quadraticCurveTo(-0.7, 0.7, -1.18, 0.64);
+    },
+    cabin: (s) => {
+      s.moveTo(0.3, 0.49);
+      s.quadraticCurveTo(0.04, 0.86, -0.3, 0.84);
+      s.quadraticCurveTo(-0.6, 0.8, -0.84, 0.62);
+    },
+  },
+};
+
+function extrude(draw: Profile, width: number) {
+  const shape = new THREE.Shape();
+  draw(shape);
+  const g = new THREE.ExtrudeGeometry(shape, {
+    depth: width,
+    bevelEnabled: true,
+    bevelSize: 0.035,
+    bevelThickness: 0.035,
+    bevelSegments: 2,
+    curveSegments: 12,
+  });
+  // the profile is drawn nose-right; turn it so the nose points down the car's +z
+  g.translate(0, 0, -width / 2);
+  g.rotateY(-Math.PI / 2);
+  return g;
+}
+
+function CarBody({ vehicle, tail }: { vehicle: Vehicle; tail: React.RefObject<THREE.MeshBasicMaterial> }) {
+  const spec = profiles[vehicle.id];
+  const body = useMemo(() => extrude(spec.body, 1.02), [spec]);
+  const cabin = useMemo(() => extrude(spec.cabin, 0.8), [spec]);
+  const paint = useMemo(
+    () => new THREE.MeshPhysicalMaterial({ color: vehicle.paint, metalness: 0.35, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 1.5 }),
+    [vehicle.paint]
+  );
+  useEffect(
+    () => () => {
+      body.dispose();
+      cabin.dispose();
+      paint.dispose();
+    },
+    [body, cabin, paint]
+  );
+
+  return (
+    <>
+      <mesh geometry={body} material={paint} castShadow />
+      <mesh geometry={cabin} castShadow>
+        <meshPhysicalMaterial color="#0b0e12" metalness={0.6} roughness={0.12} clearcoat={1} envMapIntensity={1.8} />
+      </mesh>
+      {spec.wing && (
+        <mesh position={[0, 0.7, -1.06]} material={paint} castShadow>
+          <boxGeometry args={[1.04, 0.04, 0.2]} />
+        </mesh>
+      )}
+      {([[-1, 1], [1, 1], [-1, -1], [1, -1]] as const).map(([sx, sz]) => (
+        <mesh key={`${sx}${sz}`} position={[sx * vehicle.track, vehicle.wheel, sz * vehicle.axle]} rotation-z={Math.PI / 2} castShadow>
+          <cylinderGeometry args={[vehicle.wheel, vehicle.wheel, 0.22, 20]} />
+          <meshStandardMaterial color="#0a0c0f" roughness={0.85} />
+        </mesh>
+      ))}
+      {/* headlights and tail lights */}
+      {[-0.36, 0.36].map((x) => (
+        <mesh key={x} position={[x, 0.36, 1.13]} material={glow}>
+          <boxGeometry args={[0.24, 0.05, 0.06]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.5, -1.18]}>
+        <boxGeometry args={[0.9, 0.05, 0.04]} />
+        <meshBasicMaterial ref={tail} color="#7a2a18" toneMapped={false} />
+      </mesh>
+    </>
+  );
+}
+
+/**
+ * A detailed model in place of the built shape: stood on the floor, scaled to
+ * the car's length and turned nose-forward, whatever size and axis it came in.
+ */
+function ModelBody({ vehicle }: { vehicle: Vehicle }) {
+  // meshopt-compressed files decode locally; no Draco, so nothing is fetched from a CDN
+  const { scene } = useGLTF(vehicle.model!, false, true);
+
+  const fit = useMemo(() => {
+    scene.updateMatrixWorld(true);
+    // Sample the surface to find which way the car runs: models arrive along x,
+    // along z, or parked at an angle, and a bounding box cannot tell the last from a square.
+    const pts: number[] = [];
+    const v = new THREE.Vector3();
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      const pos = mesh.geometry.getAttribute("position");
+      const stride = Math.max(1, Math.floor(pos.count / 1500));
+      for (let i = 0; i < pos.count; i += stride) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+        pts.push(v.x, v.y, v.z);
+      }
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const mat = m as THREE.MeshPhysicalMaterial;
+        if (vehicle.repaint && mat.name === vehicle.repaint.material) mat.color.set(vehicle.repaint.color);
+        // real refraction costs a second pass over the whole hall; plain see-through glass reads the same at this size
+        if (mat.transmission > 0) {
+          mat.transmission = 0;
+          mat.transparent = true;
+          mat.opacity = Math.min(mat.opacity, 0.45);
+        }
+      }
+    });
+
+    const n = pts.length / 3;
+    let mx = 0;
+    let mz = 0;
+    for (let i = 0; i < n; i++) {
+      mx += pts[i * 3];
+      mz += pts[i * 3 + 2];
+    }
+    mx /= n;
+    mz /= n;
+    let xx = 0;
+    let zz = 0;
+    let xz = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = pts[i * 3] - mx;
+      const dz = pts[i * 3 + 2] - mz;
+      xx += dx * dx;
+      zz += dz * dz;
+      xz += dx * dz;
+    }
+    // the long axis of the footprint, as an angle from +z towards +x
+    const axis = 0.5 * Math.atan2(2 * xz, zz - xx);
+    const sin = Math.sin(axis);
+    const cos = Math.cos(axis);
+
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minW = Infinity;
+    let maxW = -Infinity;
+    let minY = Infinity;
+    for (let i = 0; i < n; i++) {
+      const x = pts[i * 3];
+      const z = pts[i * 3 + 2];
+      const u = x * sin + z * cos; // along the car
+      const w = x * cos - z * sin; // across it
+      minU = Math.min(minU, u);
+      maxU = Math.max(maxU, u);
+      minW = Math.min(minW, w);
+      maxW = Math.max(maxW, w);
+      minY = Math.min(minY, pts[i * 3 + 1]);
+    }
+    const scale = (vehicle.length ?? 2.6) / (maxU - minU);
+    return {
+      scale,
+      align: -axis,
+      offset: [-(minW + maxW) / 2, -minY, -(minU + maxU) / 2] as [number, number, number],
+    };
+  }, [scene, vehicle]);
+
+  return (
+    <group rotation-y={vehicle.turn ?? 0} scale={fit.scale}>
+      <group position={fit.offset}>
+        <group rotation-y={fit.align}>
+          <primitive object={scene} />
+        </group>
+      </group>
+    </group>
+  );
+}
+
+/** If a model will not load, the built shape stays. */
+class ModelGuard extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/* ---- The car the visitor drives, carrying the hall's one warm light ---- */
+
+function Car({ vehicle }: { vehicle: Vehicle }) {
   const root = useRef<THREE.Group>(null!);
   const body = useRef<THREE.Group>(null!);
-  const head = useRef<THREE.Group>(null!);
-  const wheels = useRef<(THREE.Mesh | null)[]>([]);
-  const fronts = useRef<(THREE.Group | null)[]>([]);
-  const tail = useRef<THREE.MeshBasicMaterial>(null!);
+  const tail = useRef<THREE.MeshBasicMaterial>(null);
   const was = useRef(0);
   const lamp = useRef<THREE.SpotLight>(null!);
   const aim = useRef<THREE.Object3D>(null!);
@@ -641,78 +866,18 @@ function Rover() {
     const roll = g.steer * Math.min(1, Math.abs(g.forward) / 7) * 0.16 + g.slide * 0.018;
     body.current.rotation.z += (roll - body.current.rotation.z) * k;
     body.current.rotation.x += (Math.max(-0.09, Math.min(0.09, -accel * 0.006)) - body.current.rotation.x) * k;
-    wheels.current.forEach((w) => {
-      if (w) w.rotation.x += (g.forward * dt) / 0.3;
-    });
-    fronts.current.forEach((f) => {
-      if (f) f.rotation.y = -g.steer * 0.5;
-    });
-    tail.current.color.set(g.braking ? "#ff5a36" : "#7a2a18");
-
-    // the camera head keeps looking at the nearest exhibit
-    let look = 0;
-    let best = Infinity;
-    for (const s of stations.slice(1)) {
-      const d = Math.hypot(s.x - g.x, s.z - g.z);
-      if (d < best) {
-        best = d;
-        look = Math.atan2(s.x - g.x, s.z - g.z) - g.h;
-      }
-    }
-    const diff = Math.atan2(Math.sin(look - head.current.rotation.y), Math.cos(look - head.current.rotation.y));
-    head.current.rotation.y += diff * (1 - Math.exp(-dt * 4));
+    tail.current?.color.set(g.braking ? "#ff5a36" : "#7a2a18");
   });
 
   return (
     <group ref={root}>
       <group ref={body}>
-        <RoundedBox args={[1.1, 0.4, 1.75]} radius={0.08} smoothness={3} position={[0, 0.52, 0]} castShadow material={steel} />
-        <RoundedBox args={[0.82, 0.16, 0.95]} radius={0.05} smoothness={2} position={[0, 0.8, -0.18]} castShadow material={obsidian} />
-        {/* light bar */}
-        <mesh position={[0, 0.52, 0.885]} material={glow}>
-          <boxGeometry args={[0.86, 0.07, 0.03]} />
-        </mesh>
-        <mesh position={[0, 0.52, -0.885]}>
-          <boxGeometry args={[0.86, 0.05, 0.03]} />
-          <meshBasicMaterial ref={tail} color="#7a2a18" toneMapped={false} />
-        </mesh>
-        {/* camera mast */}
-        <mesh position={[0, 1.08, -0.3]} castShadow material={steel}>
-          <cylinderGeometry args={[0.035, 0.035, 0.44, 10]} />
-        </mesh>
-        <group ref={head} position={[0, 1.36, -0.3]}>
-          <RoundedBox args={[0.4, 0.24, 0.3]} radius={0.04} smoothness={2} castShadow material={obsidian} />
-          <mesh position={[0, 0, 0.16]} material={glow}>
-            <sphereGeometry args={[0.075, 16, 12]} />
-          </mesh>
-        </group>
+        <ModelGuard key={vehicle.id} fallback={<CarBody vehicle={vehicle} tail={tail} />}>
+          <Suspense fallback={<CarBody vehicle={vehicle} tail={tail} />}>
+            {vehicle.model ? <ModelBody vehicle={vehicle} /> : <CarBody vehicle={vehicle} tail={tail} />}
+          </Suspense>
+        </ModelGuard>
       </group>
-
-      {([[-0.62, 0.58], [0.62, 0.58], [-0.62, -0.58], [0.62, -0.58]] as const).map(([x, z], i) => (
-        <group
-          key={i}
-          position={[x, 0.3, z]}
-          ref={(el) => {
-            // the front pair turns with the wheel
-            if (z > 0) fronts.current[i] = el;
-          }}
-        >
-          <group rotation-z={Math.PI / 2}>
-            <mesh
-              ref={(el) => {
-                wheels.current[i] = el;
-              }}
-              castShadow
-            >
-              <cylinderGeometry args={[0.3, 0.3, 0.22, 20]} />
-              <meshStandardMaterial color="#0a0c0f" roughness={0.85} />
-            </mesh>
-            <mesh material={steel}>
-              <cylinderGeometry args={[0.13, 0.13, 0.24, 6]} />
-            </mesh>
-          </group>
-        </group>
-      ))}
 
       <spotLight ref={lamp} position={[0, 0.9, 0.8]} color={AMBER} intensity={150} distance={24} angle={0.72} penumbra={0.85} decay={1.7} />
       <object3D ref={aim} position={[0, 1.6, 9]} />
@@ -777,7 +942,7 @@ function Rig({ day }: { day: boolean }) {
   );
 }
 
-export default function World({ lang, day }: { lang: Lang; day: boolean }) {
+export default function World({ lang, day, vehicle }: { lang: Lang; day: boolean; vehicle: Vehicle }) {
   const ground = day ? "#e9e6e0" : "#0b0e12";
   return (
     <Canvas
@@ -796,7 +961,7 @@ export default function World({ lang, day }: { lang: Lang; day: boolean }) {
       {stations.map((s, i) => (i === 0 ? null : <Exhibit key={s.id} station={s} index={i} lang={lang} day={day} />))}
       <Skids day={day} />
       <Offcuts />
-      <Rover />
+      <Car vehicle={vehicle} />
 
       <Environment resolution={256}>
         <Lightformer intensity={1.6} color={AMBER} position={[-6, 5, 6]} scale={[10, 10, 1]} />
