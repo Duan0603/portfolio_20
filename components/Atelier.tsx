@@ -1,254 +1,527 @@
 "use client";
 
 import { useRef, useMemo, useEffect, useState, Suspense } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Lightformer, RoundedBox } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { usePrefs } from "@/lib/prefs";
-import { stage } from "@/lib/stage";
 
-/* Shared pointer + scroll state, lerped for cinematic smoothness. */
+/* Pointer tracking for interactive lighting and tilt */
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
-let scrollY = 0;
-/* Where the stack currently is — the rake light follows it down the page. */
-const focus = new THREE.Vector3(1.4, 0, 0);
 
-const SLAB_H = 0.34;
-const SEAM = 0.05;
-/* Footprint [width, depth] of each slab, top of the stack first: a cut
-   monolith that widens toward its base. One slab per skill layer. */
-const FOOTPRINTS: [number, number][] = [
-  [1.34, 1.34],
-  [1.5, 1.42],
-  [1.4, 1.52],
-  [1.52, 1.46],
-  [1.44, 1.5],
-  [1.56, 1.56],
-];
-const MID = (FOOTPRINTS.length - 1) / 2;
+type EngineMode = "hero" | "cinema" | "waste" | "fitnexus" | "skills" | "about" | "contact";
 
-const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
-const smooth = (n: number) => {
-  const t = clamp01(n);
-  return t * t * (3 - 2 * t);
-};
-
-/** 1 while the element sits around the middle of the viewport, 0 once it has left. */
-function presence(el: HTMLElement | null, vh: number) {
-  if (!el) return 0;
-  const r = el.getBoundingClientRect();
-  if (!r.width) return 0;
-  const d = Math.abs(r.top + r.height / 2 - vh / 2) / (vh / 2 + r.height / 2);
-  return smooth((0.92 - d) / 0.5);
-}
-
-const ray = new THREE.Vector3();
-/** The point on the z = 0 plane that sits under a viewport pixel. */
-function screenToWorld(
-  sx: number,
-  sy: number,
-  camera: THREE.Camera,
-  size: { width: number; height: number },
-  out: THREE.Vector3
-) {
-  ray
-    .set((sx / size.width) * 2 - 1, -(sy / size.height) * 2 + 1, 0.5)
-    .unproject(camera)
-    .sub(camera.position)
-    .normalize();
-  return out.copy(camera.position).addScaledVector(ray, -camera.position.z / ray.z);
+interface StageState {
+  mode: EngineMode;
+  modeLabel: string;
+  posX: number;
+  posY: number;
+  posZ: number;
+  scale: number;
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  cageScale: number;
+  laserScan: boolean;
+  stackOffset: number;
+  beaconPulse: boolean;
+  pulseSpeed: number;
 }
 
 /**
- * The full stack, literally: six machined obsidian slabs with the amber rake
- * leaking through their seams. Assembled and twisting under the cursor in the
- * hero, a fogged ghost while the visitor walks the hall, split apart with one
- * slab beside each skill layer, then whole again at the contact invitation.
+ * World-class 3D Neural Monolith Engine:
+ * A persistent, scrollytelling artifact that accompanies the visitor
+ * across the entire portfolio journey, physically morphing its structure to
+ * reflect the specific engineering domain of each section:
+ *
+ * 1. Hero: Autonomous Obsidian Core & Titanium Orbital Ring.
+ * 2. Web Microservices (Cinema): Expanded decoupled wireframe mesh & bus interconnects.
+ * 3. Edge AI (Smart Waste): Active holographic laser scanner & 30 FPS inference pulse.
+ * 4. Hardware IoT (Fitnexus): Precision mechanical orientation & servo bus lines.
+ * 5. Skills Matrix: Deconstructed multi-tier silicon wafer architecture stack.
+ * 6. Contact: Rhythmic dispatch beacon radiating outward.
  */
-function Monolith({ reduced, day }: { reduced: boolean; day: boolean }) {
-  const slabs = useRef<(THREE.Group | null)[]>([]);
-  const seams = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
-  const lift = useRef<number[]>(FOOTPRINTS.map(() => 0));
-  const spin = useRef(0.6);
-  const placed = useRef(false);
+function ScrollytellingMonolith({ day, reduced, onModeChange }: { day: boolean; reduced: boolean; onModeChange: (label: string) => void }) {
+  const rootGroup = useRef<THREE.Group>(null);
+  const outerMesh = useRef<THREE.Mesh>(null);
+  const wireMesh = useRef<THREE.Mesh>(null);
+  const coreMesh = useRef<THREE.Mesh>(null);
+  const ring1Ref = useRef<THREE.Mesh>(null);
+  const ring2Ref = useRef<THREE.Mesh>(null);
+  const laserPlaneRef = useRef<THREE.Mesh>(null);
+  const reticleGroup = useRef<THREE.Group>(null);
+  const stackTopRef = useRef<THREE.Mesh>(null);
+  const stackBottomRef = useRef<THREE.Mesh>(null);
+  const beaconRingsRef = useRef<THREE.Group>(null);
 
-  const obsidian = useMemo(
+  // Current interpolated state
+  const current = useRef<StageState>({
+    mode: "hero",
+    modeLabel: "SYSTEM_ONLINE // CORE_IDLE",
+    posX: 2.0,
+    posY: 0.1,
+    posZ: -1.0,
+    scale: 1.35,
+    rotX: 0.1,
+    rotY: 0,
+    rotZ: 0,
+    cageScale: 1.12,
+    laserScan: false,
+    stackOffset: 0,
+    beaconPulse: false,
+    pulseSpeed: 1.2,
+  });
+
+  // Materials
+  const obsidianMat = useMemo(
     () =>
       new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#0b0e13"),
-        metalness: 0.86,
-        roughness: 0.2,
+        color: day ? new THREE.Color("#dcd6cc") : new THREE.Color("#0a0c10"),
+        metalness: 0.92,
+        roughness: 0.14,
         clearcoat: 1.0,
-        clearcoatRoughness: 0.16,
-        reflectivity: 0.85,
-        envMapIntensity: 1.7,
+        clearcoatRoughness: 0.08,
+        reflectivity: 0.95,
+        envMapIntensity: 1.6,
       }),
-    []
+    [day]
   );
 
-  const v = useMemo(
-    () => ({
-      centre: new THREE.Vector3(),
-      to: new THREE.Vector3(),
-      slab: new THREE.Vector3(),
-      row: new THREE.Vector3(),
-    }),
-    []
+  const wireMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: day ? "#8a5412" : "#f2bb6e",
+        emissive: day ? "#6e3f08" : "#d99a4c",
+        emissiveIntensity: day ? 0.7 : 1.35,
+        wireframe: true,
+        transparent: true,
+        opacity: day ? 0.5 : 0.75,
+      }),
+    [day]
   );
 
-  useFrame(({ camera, size }, dt) => {
-    const vh = size.height;
-    const narrow = size.width / vh < 0.8;
-    // world units per pixel on the z = 0 plane
-    const upp =
-      (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360) *
-        camera.position.z) /
-      vh;
-    const halfW = (size.width * upp) / 2;
+  const coreMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: day ? "#b9772a" : "#f2bb6e",
+        emissive: day ? "#8a5412" : "#d99a4c",
+        emissiveIntensity: day ? 0.9 : 2.2,
+        roughness: 0.2,
+        toneMapped: false,
+      }),
+    [day]
+  );
 
-    const hero = 1 - smooth(scrollY / (vh * 0.85));
-    const split = presence(stage.anchor, vh);
-    const fin = presence(stage.finale, vh);
+  const ringMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: day ? "#6e7782" : "#2a3340",
+        metalness: 0.95,
+        roughness: 0.2,
+      }),
+    [day]
+  );
 
-    // Between the lit moments the stack waits deep in the fog as a ghost.
-    v.centre.set(halfW * 0.9, -0.4, -10);
-    v.to.set(narrow ? 0.25 : halfW * 0.46, narrow ? 0.35 : 0.05, narrow ? -1.8 : 0);
-    v.centre.lerp(v.to, hero);
+  const laserMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: day ? "#9e5c10" : "#f2bb6e",
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: day ? THREE.NormalBlending : THREE.AdditiveBlending,
+      }),
+    [day]
+  );
 
-    let scale = 1;
-    if (fin > 0 && stage.finale) {
-      const r = stage.finale.getBoundingClientRect();
-      screenToWorld(r.left + r.width / 2, r.top + r.height / 2, camera, size, v.to);
-      v.centre.lerp(v.to, fin);
-      scale = THREE.MathUtils.lerp(1, THREE.MathUtils.clamp((r.width * upp) / 2.5, 0.3, 1.05), fin);
+  const beaconRingMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: day ? "#8a5412" : "#f2bb6e",
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: day ? THREE.NormalBlending : THREE.AdditiveBlending,
+      }),
+    [day]
+  );
+
+  useEffect(() => {
+    return () => {
+      obsidianMat.dispose();
+      wireMat.dispose();
+      coreMat.dispose();
+      ringMat.dispose();
+      laserMat.dispose();
+      beaconRingMat.dispose();
+    };
+  }, [obsidianMat, wireMat, coreMat, ringMat, laserMat, beaconRingMat]);
+
+  useFrame((state, dt) => {
+    const time = state.clock.elapsedTime;
+    const easeRate = 1 - Math.exp(-dt * 4.2);
+
+    // Pointer lerp
+    pointer.x += (pointer.tx - pointer.x) * (1 - Math.exp(-dt * 6));
+    pointer.y += (pointer.ty - pointer.y) * (1 - Math.exp(-dt * 6));
+
+    // Calculate active section based on scroll position and DOM markers
+    const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+
+    const cinemaEl = document.getElementById("case-cinema");
+    const wasteEl = document.getElementById("case-waste");
+    const fitnexusEl = document.getElementById("case-fitnexus");
+    const skillsEl = document.getElementById("skills");
+    const contactEl = document.getElementById("contact");
+
+    const getCenterDist = (el: HTMLElement | null) => {
+      if (!el) return 99999;
+      const rect = el.getBoundingClientRect();
+      return Math.abs(rect.top + rect.height * 0.35 - vh * 0.5);
+    };
+
+    const dCinema = getCenterDist(cinemaEl);
+    const dWaste = getCenterDist(wasteEl);
+    const dFitnexus = getCenterDist(fitnexusEl);
+    const dSkills = getCenterDist(skillsEl);
+    const dContact = getCenterDist(contactEl);
+
+    // Target parameters depending on viewport section
+    let target: StageState = {
+      mode: "hero",
+      modeLabel: "SYSTEM_ONLINE // CORE_IDLE",
+      posX: 2.0,
+      posY: 0.1,
+      posZ: -1.0,
+      scale: 1.35,
+      rotX: 0.1,
+      rotY: time * 0.22,
+      rotZ: 0,
+      cageScale: 1.12,
+      laserScan: false,
+      stackOffset: 0,
+      beaconPulse: false,
+      pulseSpeed: 1.0,
+    };
+
+    if (dContact < vh * 0.65) {
+      target = {
+        mode: "contact",
+        modeLabel: "READY_FOR_DEPLOYMENT // BEACON_PING",
+        posX: 0.0,
+        posY: -0.3,
+        posZ: -1.8,
+        scale: 1.15,
+        rotX: 0.2,
+        rotY: time * 0.15,
+        rotZ: 0,
+        cageScale: 1.1,
+        laserScan: false,
+        stackOffset: 0,
+        beaconPulse: true,
+        pulseSpeed: 1.5,
+      };
+    } else if (dSkills < vh * 0.65) {
+      target = {
+        mode: "skills",
+        modeLabel: "6_LAYER_STACK // DISTRIBUTED_NODES",
+        posX: 0.0,
+        posY: 0.2,
+        posZ: -2.6,
+        scale: 1.25,
+        rotX: 0.65,
+        rotY: 0.35 + Math.sin(time * 0.2) * 0.1,
+        rotZ: -0.1,
+        cageScale: 1.2,
+        laserScan: false,
+        stackOffset: 0.55,
+        beaconPulse: false,
+        pulseSpeed: 1.2,
+      };
+    } else if (dFitnexus < vh * 0.55) {
+      target = {
+        mode: "fitnexus",
+        modeLabel: "EMBEDDED_BUS // PCA9685_I2C",
+        posX: 2.1,
+        posY: 0.0,
+        posZ: -1.5,
+        scale: 1.2,
+        rotX: 0.45,
+        rotY: time * 0.2 + 0.8,
+        rotZ: 0.25,
+        cageScale: 1.15,
+        laserScan: false,
+        stackOffset: 0,
+        beaconPulse: false,
+        pulseSpeed: 1.6,
+      };
+    } else if (dWaste < vh * 0.55) {
+      target = {
+        mode: "waste",
+        modeLabel: "TENSORRT_INFERENCE // 30+FPS_CV",
+        posX: 1.85,
+        posY: 0.05,
+        posZ: -1.1,
+        scale: 1.45,
+        rotX: 0.08,
+        rotY: time * 0.45,
+        rotZ: 0.0,
+        cageScale: 1.16,
+        laserScan: true,
+        stackOffset: 0,
+        beaconPulse: false,
+        pulseSpeed: 4.2, // high-speed AI inference pulse
+      };
+    } else if (dCinema < vh * 0.55) {
+      target = {
+        mode: "cinema",
+        modeLabel: "MICROSERVICES // GATEWAY_BUS",
+        posX: 2.25,
+        posY: 0.15,
+        posZ: -1.6,
+        scale: 1.2,
+        rotX: 0.42,
+        rotY: time * 0.16 + 1.2,
+        rotZ: 0.15,
+        cageScale: 1.32, // decoupled outer cage
+        laserScan: false,
+        stackOffset: 0,
+        beaconPulse: false,
+        pulseSpeed: 1.8,
+      };
+    } else if (scrollY > 400) {
+      // Transitioning between hero and work
+      target = {
+        mode: "hero",
+        modeLabel: "TRANSIT // ARCHITECTURE_INSPECT",
+        posX: 2.1,
+        posY: 0.1,
+        posZ: -1.4,
+        scale: 1.25,
+        rotX: 0.2,
+        rotY: time * 0.2,
+        rotZ: 0,
+        cageScale: 1.15,
+        laserScan: false,
+        stackOffset: 0,
+        beaconPulse: false,
+        pulseSpeed: 1.2,
+      };
     }
 
-    let dockX = 0;
-    let dockScale = 1;
-    if (split > 0 && stage.anchor) {
-      const r = stage.anchor.getBoundingClientRect();
-      dockX = r.left + r.width / 2;
-      dockScale = THREE.MathUtils.clamp((r.width * upp) / 2.25, 0.16, 1);
+    // Smooth state interpolation
+    const cur = current.current;
+    cur.posX += (target.posX - cur.posX) * easeRate;
+    cur.posY += (target.posY - cur.posY) * easeRate;
+    cur.posZ += (target.posZ - cur.posZ) * easeRate;
+    cur.scale += (target.scale - cur.scale) * easeRate;
+    cur.rotX += (target.rotX - cur.rotX) * easeRate;
+    cur.rotY += (target.rotY - cur.rotY) * easeRate;
+    cur.rotZ += (target.rotZ - cur.rotZ) * easeRate;
+    cur.cageScale += (target.cageScale - cur.cageScale) * easeRate;
+    cur.stackOffset += (target.stackOffset - cur.stackOffset) * easeRate;
+    cur.pulseSpeed += (target.pulseSpeed - cur.pulseSpeed) * easeRate;
+    cur.laserScan = target.laserScan;
+    cur.beaconPulse = target.beaconPulse;
+
+    if (cur.modeLabel !== target.modeLabel) {
+      cur.modeLabel = target.modeLabel;
+      onModeChange(target.modeLabel);
     }
 
-    const tilt = THREE.MathUtils.lerp(0.2 + pointer.y * 0.14, 0.44, split);
-    const twist = THREE.MathUtils.lerp(0.16 + pointer.x * 0.42, 0.52, split);
-    // the seams breathe open as the stack leaves the hero
-    const gap = SEAM + (1 - hero) * (1 - fin) * 0.16;
-    if (!reduced) spin.current += dt * 0.16;
+    // Apply to Three.js meshes
+    const g = rootGroup.current;
+    if (g) {
+      const floatY = Math.sin(time * 0.8) * 0.05;
+      const px = reduced ? 0 : pointer.x;
+      const py = reduced ? 0 : pointer.y;
 
-    const ease = reduced || !placed.current ? 1 : 1 - Math.exp(-dt * 12);
-    const liftEase = reduced ? 1 : 1 - Math.exp(-dt * 9);
+      g.position.set(cur.posX + px * 0.15, cur.posY + floatY - py * 0.1, cur.posZ);
+      g.scale.setScalar(cur.scale);
+      g.rotation.set(cur.rotX + py * 0.2, cur.rotY + px * 0.3, cur.rotZ);
+    }
 
-    for (let i = 0; i < FOOTPRINTS.length; i++) {
-      const g = slabs.current[i];
-      if (!g) continue;
+    if (outerMesh.current) {
+      outerMesh.current.rotation.y = time * 0.1;
+    }
 
-      const dy = (MID - i) * (SLAB_H + gap) * scale;
-      v.slab.set(v.centre.x, v.centre.y + dy * Math.cos(tilt), v.centre.z + dy * Math.sin(tilt));
+    if (wireMesh.current) {
+      wireMesh.current.scale.setScalar(cur.cageScale);
+      wireMesh.current.rotation.y = -time * 0.15;
+      wireMesh.current.rotation.z = Math.sin(time * 0.3) * 0.15;
+    }
 
-      lift.current[i] += ((stage.active === i ? 1 : 0) - lift.current[i]) * liftEase;
-      const a = lift.current[i] * split;
+    // Pulsating energy core
+    if (coreMesh.current) {
+      const pulse = 1 + Math.sin(time * cur.pulseSpeed * 3) * 0.15;
+      coreMesh.current.scale.setScalar(0.45 * pulse);
+    }
 
-      let sx = scale;
-      let sy = scale;
-      const row = stage.rows[i];
-      if (split > 0 && row) {
-        const r = row.getBoundingClientRect();
-        screenToWorld(dockX, r.top + r.height / 2, camera, size, v.row);
-        v.row.z += a * 0.45;
-        v.slab.lerp(v.row, split);
-        sx = THREE.MathUtils.lerp(scale, dockScale * (1 + a * 0.08), split);
-        sy = THREE.MathUtils.lerp(scale, dockScale * 0.5, split);
+    // Kinetic orbital rings
+    if (ring1Ref.current) {
+      ring1Ref.current.rotation.z = time * 0.35;
+      ring1Ref.current.rotation.x = Math.sin(time * 0.3) * 0.4;
+    }
+    if (ring2Ref.current) {
+      ring2Ref.current.rotation.y = time * 0.28;
+      ring2Ref.current.rotation.z = -time * 0.22;
+    }
+
+    // Laser Scanner (active during Edge AI section)
+    if (laserPlaneRef.current) {
+      laserPlaneRef.current.visible = cur.laserScan;
+      if (cur.laserScan) {
+        laserPlaneRef.current.position.y = Math.sin(time * 3.5) * 1.1;
       }
+    }
 
-      g.position.lerp(v.slab, ease);
-      g.scale.set(sx, sy, sx);
-      g.rotation.set(tilt, spin.current + (i - MID) * twist, 0);
-
-      const seam = seams.current[i];
-      if (seam) {
-        seam.opacity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(0.95, 0.3, split), 1, a);
+    if (reticleGroup.current) {
+      reticleGroup.current.visible = cur.laserScan;
+      if (cur.laserScan) {
+        reticleGroup.current.rotation.z = time * 0.2;
       }
     }
 
-    placed.current = true;
-    const mid = slabs.current[Math.floor(MID)];
-    if (mid) focus.copy(mid.position);
+    // Layered Stack (active during Skills section)
+    if (stackTopRef.current && stackBottomRef.current) {
+      const active = cur.stackOffset > 0.05;
+      stackTopRef.current.visible = active;
+      stackBottomRef.current.visible = active;
+      if (active) {
+        stackTopRef.current.position.y = cur.stackOffset;
+        stackBottomRef.current.position.y = -cur.stackOffset;
+      }
+    }
+
+    // Beacon Waves (active during Contact section)
+    if (beaconRingsRef.current) {
+      beaconRingsRef.current.visible = cur.beaconPulse;
+      if (cur.beaconPulse) {
+        beaconRingsRef.current.children.forEach((child, i) => {
+          const mesh = child as THREE.Mesh;
+          const cycle = (time * 0.8 + i * 0.33) % 1;
+          mesh.scale.setScalar(1 + cycle * 2.2);
+          const mat = mesh.material as THREE.MeshBasicMaterial;
+          mat.opacity = Math.max(0, 0.45 * (1 - cycle));
+        });
+      }
+    }
   });
 
   return (
-    <>
-      {FOOTPRINTS.map(([w, d], i) => (
-        <group
-          key={i}
-          ref={(el) => {
-            slabs.current[i] = el;
-          }}
-        >
-          <RoundedBox args={[w, SLAB_H, d]} radius={0.03} smoothness={3}>
-            <primitive object={obsidian} attach="material" />
-          </RoundedBox>
-          {/* the light caught under each slab, seen through the seam */}
-          <mesh position={[0, -SLAB_H / 2 - SEAM / 2, 0]}>
-            <boxGeometry args={[w * 0.9, 0.018, d * 0.9]} />
-            <meshBasicMaterial
-              ref={(el) => {
-                seams.current[i] = el;
-              }}
-              color={day ? "#d99a4c" : "#f2bb6e"}
-              transparent
-              toneMapped={false}
-            />
+    <group ref={rootGroup} position={[2.0, 0.1, -1.0]} scale={1.35}>
+      {/* 1. Main Obsidian Geometric Core */}
+      <mesh ref={outerMesh}>
+        <icosahedronGeometry args={[1.0, 0]} />
+        <primitive object={obsidianMat} attach="material" />
+      </mesh>
+
+      {/* 2. Decoupled Outer Wireframe Cage */}
+      <mesh ref={wireMesh} scale={1.12}>
+        <dodecahedronGeometry args={[1.0, 0]} />
+        <primitive object={wireMat} attach="material" />
+      </mesh>
+
+      {/* 3. Internal Pulsating Silicon / NPU Energy Core */}
+      <mesh ref={coreMesh} scale={0.45}>
+        <octahedronGeometry args={[1.0, 0]} />
+        <primitive object={coreMat} attach="material" />
+      </mesh>
+
+      {/* 4. Dual Kinetic Titanium Orbital Rings */}
+      <mesh ref={ring1Ref} rotation={[0.6, 0.2, 0]}>
+        <torusGeometry args={[1.55, 0.012, 16, 64]} />
+        <primitive object={ringMat} attach="material" />
+      </mesh>
+
+      <mesh ref={ring2Ref} rotation={[-0.4, 0.8, 0.3]}>
+        <torusGeometry args={[1.85, 0.009, 16, 64]} />
+        <primitive object={ringMat} attach="material" />
+      </mesh>
+
+      {/* 5. Edge AI Holographic Laser Scanner */}
+      <mesh ref={laserPlaneRef} rotation={[Math.PI / 2, 0, 0]} visible={false}>
+        <ringGeometry args={[0, 1.4, 32]} />
+        <primitive object={laserMat} attach="material" />
+      </mesh>
+
+      {/* Edge AI Holographic Corner Brackets Reticle */}
+      <group ref={reticleGroup} visible={false}>
+        {[-1.25, 1.25].map((x) =>
+          [-1.25, 1.25].map((y) => (
+            <group key={`${x}-${y}`} position={[x, y, 0]}>
+              <mesh position={[x > 0 ? -0.1 : 0.1, 0, 0]}>
+                <boxGeometry args={[0.2, 0.02, 0.02]} />
+                <primitive object={coreMat} attach="material" />
+              </mesh>
+              <mesh position={[0, y > 0 ? -0.1 : 0.1, 0]}>
+                <boxGeometry args={[0.02, 0.2, 0.02]} />
+                <primitive object={coreMat} attach="material" />
+              </mesh>
+            </group>
+          ))
+        )}
+      </group>
+
+      {/* 6. Skills Multi-Tier Layered Stack Plates */}
+      <mesh ref={stackTopRef} position={[0, 0, 0]} scale={[1.2, 0.04, 1.2]} visible={false}>
+        <cylinderGeometry args={[1.1, 1.1, 0.08, 6]} />
+        <primitive object={obsidianMat} attach="material" />
+      </mesh>
+
+      <mesh ref={stackBottomRef} position={[0, 0, 0]} scale={[1.2, 0.04, 1.2]} visible={false}>
+        <cylinderGeometry args={[1.1, 1.1, 0.08, 6]} />
+        <primitive object={obsidianMat} attach="material" />
+      </mesh>
+
+      {/* 7. Contact Beacon Ripples */}
+      <group ref={beaconRingsRef} rotation={[Math.PI / 2, 0, 0]} visible={false}>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i}>
+            <ringGeometry args={[0.9, 0.94, 48]} />
+            <primitive object={beaconRingMat} attach="material" />
           </mesh>
-        </group>
-      ))}
-    </>
+        ))}
+      </group>
+    </group>
   );
 }
 
 /**
- * Dust hanging in the light
+ * Suspended Data Constellation in depth
  */
-function DataParticles({ count = 65, day }: { count?: number; day: boolean }) {
+function DataConstellation({ count = 95, day }: { count?: number; day: boolean }) {
   const pointsRef = useRef<THREE.Points>(null!);
 
   const geometry = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      // Cylindrical volume around the centre
-      const theta = Math.random() * Math.PI * 2;
-      const radius = 1.8 + Math.random() * 4.2;
-      const y = (Math.random() - 0.5) * 5.5;
-
-      pos[i * 3] = Math.cos(theta) * radius;
-      pos[i * 3 + 1] = y;
-      pos[i * 3 + 2] = Math.sin(theta) * radius - 1.2;
+      pos[i * 3] = (Math.random() - 0.5) * 26;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 18;
+      pos[i * 3 + 2] = -2 - Math.random() * 16;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     return geo;
   }, [count]);
 
-  useFrame((_, dt) => {
+  useFrame(({ clock }) => {
     if (!pointsRef.current) return;
-    pointsRef.current.rotation.y += dt * 0.035;
-    pointsRef.current.rotation.x = THREE.MathUtils.lerp(
-      pointsRef.current.rotation.x,
-      pointer.ty * 0.08,
-      0.04
-    );
+    pointsRef.current.rotation.y = clock.elapsedTime * 0.012;
+    pointsRef.current.rotation.x = pointer.y * 0.03;
   });
 
   return (
     <points ref={pointsRef}>
       <primitive object={geometry} attach="geometry" />
       <pointsMaterial
-        key={day ? "day" : "night"}
         color={day ? "#8a5412" : "#f2bb6e"}
-        size={0.042}
+        size={0.034}
         transparent
-        opacity={day ? 0.55 : 0.65}
+        opacity={day ? 0.35 : 0.5}
         blending={day ? THREE.NormalBlending : THREE.AdditiveBlending}
         depthWrite={false}
       />
@@ -257,143 +530,70 @@ function DataParticles({ count = 65, day }: { count?: number; day: boolean }) {
 }
 
 /**
- * Offcuts of obsidian, far enough back that the fog keeps them under the text
+ * Cursor-tracked Raking Spotlight
  */
-function FloatingShards({ reduced }: { reduced: boolean }) {
-  const ref = useRef<THREE.Group>(null!);
-  const shards = useMemo(() => {
-    const rng = (seed: number) => {
-      const x = Math.sin(seed * 999.17) * 43758.5453;
-      return x - Math.floor(x);
-    };
-    return new Array(8).fill(0).map((_, i) => ({
-      pos: [
-        (rng(i + 1) - 0.5) * 14,
-        (rng(i + 7) - 0.5) * 8,
-        -4.5 - rng(i + 3) * 5,
-      ] as [number, number, number],
-      scale: 0.2 + rng(i + 5) * 0.4,
-      rot: [rng(i) * 6, rng(i + 2) * 6, rng(i + 4) * 6] as [number, number, number],
-      speed: 0.03 + rng(i + 6) * 0.06,
-    }));
-  }, []);
-
-  const mat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#0c1017"),
-        metalness: 0.7,
-        roughness: 0.22,
-        flatShading: true,
-        clearcoat: 0.7,
-        envMapIntensity: 1.1,
-      }),
-    []
-  );
-
-  useFrame((_, dt) => {
-    if (reduced || !ref.current) return;
-    ref.current.children.forEach((c, i) => {
-      c.rotation.x += dt * shards[i].speed;
-      c.rotation.y += dt * shards[i].speed * 0.9;
-    });
-  });
-
-  return (
-    <group ref={ref}>
-      {shards.map((s, i) => (
-        <mesh key={i} position={s.pos} rotation={s.rot} scale={s.scale}>
-          <octahedronGeometry args={[1, 0]} />
-          <primitive object={mat} attach="material" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-/* The warm raking key light: tracks the pointer and follows the stack */
 function RakeLight({ reduced }: { reduced: boolean }) {
   const light = useRef<THREE.SpotLight>(null!);
   const target = useMemo(() => new THREE.Object3D(), []);
-  const { scene } = useThree();
-
-  useEffect(() => {
-    scene.add(target);
-    return () => {
-      scene.remove(target);
-    };
-  }, [scene, target]);
 
   useFrame(() => {
     if (!light.current) return;
-    const px = reduced ? -0.3 : pointer.x;
-    const py = reduced ? 0.2 : pointer.y;
-    light.current.position.set(
-      focus.x - 5.4 + px * 3.2,
-      focus.y + 3.2 + py * 2.2,
-      focus.z + 5.8
-    );
-    target.position.set(focus.x + px, focus.y + py * 0.7, focus.z);
+    const px = reduced ? 0 : pointer.x;
+    const py = reduced ? 0 : pointer.y;
+
+    light.current.position.set(1.5 + px * 2.2, 1.5 + py * 1.6, 3.8);
+    target.position.set(1.8, 0, -1.0);
     light.current.target = target;
   });
 
   return (
-    <spotLight
-      ref={light}
-      color="#f2bb6e"
-      intensity={reduced ? 50 : 75}
-      distance={28}
-      angle={0.65}
-      penumbra={0.9}
-      decay={1.35}
-    />
+    <>
+      <primitive object={target} />
+      <spotLight
+        ref={light}
+        color="#f2bb6e"
+        intensity={2.2}
+        angle={0.72}
+        penumbra={0.85}
+        decay={1.2}
+      />
+    </>
   );
 }
 
-function CameraRig() {
-  const { camera } = useThree();
-  useFrame(({ size }) => {
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, pointer.x * 0.65, 0.05);
-    // the scroll drift belongs to the hero; further down the stack is docked to the page
-    camera.position.y = THREE.MathUtils.lerp(
-      camera.position.y,
-      0.15 + pointer.y * 0.35 - Math.min(scrollY, size.height) * 0.0008,
-      0.05
-    );
-    camera.lookAt(0.3, 0, 0);
-  });
-  return null;
-}
-
-function AtelierScene({ reduced, day }: { reduced: boolean; day: boolean }) {
-  // the vault ground, matching --vault in each colorway
+function AtelierScene({
+  reduced,
+  day,
+  onModeChange,
+}: {
+  reduced: boolean;
+  day: boolean;
+  onModeChange: (label: string) => void;
+}) {
   const ground = day ? "#e9e6e0" : "#070809";
   return (
     <>
       <color attach="background" args={[ground]} />
-      <fog attach="fog" args={[ground, 7, 18]} />
-      <ambientLight intensity={day ? 0.7 : 0.16} color={day ? "#f3efe8" : "#1e2633"} />
+      <fog attach="fog" args={[ground, 6, 26]} />
+      <ambientLight intensity={day ? 0.75 : 0.24} color={day ? "#f3efe8" : "#1a2230"} />
 
-      {/* Cool steel rim backlight for crisp edges */}
-      <directionalLight position={[6, 2.5, -3.5]} intensity={0.75} color="#8ea3bd" />
+      {/* Rim cool backlight */}
+      <directionalLight position={[5, 4, -4]} intensity={0.85} color="#8ea3bd" />
 
-      {/* Main Raking Key Light */}
+      {/* Main Raking Key Spotlight */}
       <RakeLight reduced={reduced} />
 
-      <Suspense fallback={null}>
-        <Monolith reduced={reduced} day={day} />
-        <DataParticles count={70} day={day} />
-        <FloatingShards reduced={reduced} />
+      {/* The Persistent Scrollytelling Monolith */}
+      <ScrollytellingMonolith day={day} reduced={reduced} onModeChange={onModeChange} />
 
-        {/* Studio reflections */}
+      <Suspense fallback={null}>
+        <DataConstellation count={100} day={day} />
+
         <Environment resolution={256}>
-          <Lightformer intensity={1.8} color="#f2bb6e" position={[-5, 3, 4]} scale={[8, 8, 1]} />
-          <Lightformer intensity={0.65} color="#8ea3bd" position={[6, -1, -3]} scale={[6, 6, 1]} />
-          <Lightformer intensity={0.3} color="#1a202c" position={[0, -4, 2]} scale={[12, 6, 1]} />
+          <Lightformer intensity={1.6} color="#f2bb6e" position={[-4, 3, 3]} scale={[6, 6, 1]} />
+          <Lightformer intensity={0.7} color="#8ea3bd" position={[5, -1, -2]} scale={[6, 6, 1]} />
         </Environment>
       </Suspense>
-
-      <CameraRig />
     </>
   );
 }
@@ -401,7 +601,7 @@ function AtelierScene({ reduced, day }: { reduced: boolean; day: boolean }) {
 export default function Atelier() {
   const [reduced, setReduced] = useState(false);
   const [ok, setOk] = useState(true);
-  // R3F renders in its own React root, so the preference is read here and passed down
+  const [telemetry, setTelemetry] = useState("SYSTEM_ONLINE // CORE_IDLE");
   const day = usePrefs().colorway === "day";
 
   useEffect(() => {
@@ -413,28 +613,14 @@ export default function Atelier() {
     const onMove = (e: PointerEvent) => {
       pointer.tx = (e.clientX / window.innerWidth) * 2 - 1;
       pointer.ty = -((e.clientY / window.innerHeight) * 2 - 1);
-      document.documentElement.style.setProperty("--rx", `${(e.clientX / window.innerWidth) * 100}%`);
-      document.documentElement.style.setProperty("--ry", `${(e.clientY / window.innerHeight) * 100}%`);
     };
-    const onScroll = () => {
-      scrollY = window.scrollY;
-    };
-    onScroll();
-
-    let raf = 0;
-    const loop = () => {
-      pointer.x += (pointer.tx - pointer.x) * 0.08;
-      pointer.y += (pointer.ty - pointer.y) * 0.08;
-      raf = requestAnimationFrame(loop);
-    };
-    loop();
-
     window.addEventListener("pointermove", onMove, { passive: true });
-    window.addEventListener("scroll", onScroll, { passive: true });
 
     try {
       const c = document.createElement("canvas");
-      if (!c.getContext("webgl2") && !c.getContext("webgl")) setOk(false);
+      if (!c.getContext("webgl2") && !c.getContext("webgl")) {
+        setOk(false);
+      }
     } catch {
       setOk(false);
     }
@@ -442,25 +628,38 @@ export default function Atelier() {
     return () => {
       mq.removeEventListener?.("change", onMq);
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("scroll", onScroll);
-      cancelAnimationFrame(raf);
     };
   }, []);
 
   return (
-    <div className="atelier-stage" aria-hidden="true">
-      <div className="atelier-vault" />
-      {ok && (
-        <Canvas
-          className="atelier-canvas"
-          dpr={[1, 1.75]}
-          gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
-          camera={{ position: [0, 0.2, 5.8], fov: 42 }}
-        >
-          <AtelierScene reduced={reduced} day={day} />
-        </Canvas>
-      )}
-      <div className="atelier-grain" />
-    </div>
+    <>
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden" aria-hidden="true">
+        {ok && (
+          <Canvas
+            className="w-full h-full"
+            dpr={[1, 1.5]}
+            gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+            camera={{ position: [0, 0, 5], fov: 45, near: 0.1, far: 50 }}
+          >
+            <AtelierScene reduced={reduced} day={day} onModeChange={setTelemetry} />
+          </Canvas>
+        )}
+        <div className="atelier-grain" />
+      </div>
+
+      {/* Floating 3D Telemetry HUD - Anchored to the persistent 3D Monolith Engine */}
+      <div
+        className="fixed bottom-4 right-4 z-40 hidden sm:flex items-center gap-2.5 rounded border border-line/70 bg-vault/80 px-3 py-1.5 backdrop-blur-md font-mono text-[0.68rem] tracking-wider text-steel shadow-lg shadow-black/40"
+        aria-live="polite"
+      >
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber opacity-75" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-bright" />
+        </span>
+        <span className="text-amber-bright font-semibold">3D ENGINE</span>
+        <span className="text-line-strong">|</span>
+        <span className="text-ink">{telemetry}</span>
+      </div>
+    </>
   );
 }

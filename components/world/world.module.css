@@ -1,0 +1,699 @@
+/* The drivable atelier. Colours and faces come from the tokens in globals.css. */
+
+.shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--vault);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+.shell[data-mode="page"] {
+  position: static;
+  overflow: visible;
+  min-height: 100svh;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* ---- Top bar ---- */
+.bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  pointer-events: none;
+}
+.bar > * {
+  pointer-events: auto;
+}
+.shell[data-mode="page"] .bar {
+  position: sticky;
+  top: 0;
+  background: color-mix(in srgb, var(--vault) 88%, transparent);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 1px;
+  background: linear-gradient(180deg, var(--amber-bright), var(--amber));
+  box-shadow: 0 3px 12px -3px var(--amber);
+}
+
+.stops {
+  display: none;
+  min-width: 0;
+}
+.stops ol {
+  display: flex;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.2rem;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--obsidian) 82%, transparent);
+}
+.stops button {
+  padding: 0.4rem 0.7rem;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--steel);
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+.stops button:hover {
+  color: var(--ink);
+}
+.stops button[aria-current] {
+  background: var(--obsidian-hi);
+  color: var(--amber-bright);
+  box-shadow: 0 1px 0 var(--line) inset;
+}
+@media (min-width: 1180px) {
+  .stops {
+    display: block;
+  }
+}
+
+.prefs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.modeToggle {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--obsidian) 82%, transparent);
+  color: var(--steel);
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.modeToggle:hover {
+  color: var(--amber-bright);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--obsidian) 82%, transparent);
+}
+.seg button {
+  min-width: 2rem;
+  padding: 0.3rem 0.45rem;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  color: var(--steel);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--obsidian-hi);
+  color: var(--amber-bright);
+}
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--obsidian) 82%, transparent);
+  color: var(--steel);
+  cursor: pointer;
+}
+.icon:hover {
+  color: var(--amber-bright);
+}
+
+/* ---- The panel that opens at a stop: one slab of the hall, lit along its top edge ---- */
+.panel {
+  position: absolute;
+  z-index: 20;
+  inset: auto 0.6rem 4.9rem 0.6rem;
+  max-height: 52svh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem 1.25rem 1.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: linear-gradient(165deg, var(--obsidian-hi), var(--obsidian) 38%, var(--vault-2));
+  box-shadow: 0 30px 60px -30px var(--cast);
+  line-height: 1.6;
+  scrollbar-width: thin;
+  scrollbar-color: var(--steel-dim) transparent;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.panel::before {
+  content: "";
+  position: sticky;
+  top: -1.25rem;
+  display: block;
+  height: 1px;
+  margin: -1.25rem -1.25rem 1.25rem;
+  background: linear-gradient(90deg, var(--amber-bright), color-mix(in srgb, var(--amber) 30%, transparent) 55%, transparent);
+}
+@starting-style {
+  .panel {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+}
+@media (min-width: 900px) {
+  .panel {
+    inset: 4.6rem 1.25rem auto auto;
+    width: min(31rem, 42vw);
+    max-height: calc(100% - 10.4rem);
+    padding: 1.9rem 2rem 2.1rem;
+  }
+  .panel::before {
+    top: -1.9rem;
+    margin: -1.9rem -2rem 1.9rem;
+  }
+  @starting-style {
+    .panel {
+      opacity: 0;
+      transform: translateX(1.5rem);
+    }
+  }
+}
+.close {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: -0.35rem -0.35rem 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--obsidian);
+  color: var(--steel);
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.close:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.place {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--amber-bright);
+}
+.title {
+  font-size: clamp(1.75rem, 6.5vw, 2.4rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.role {
+  margin: 0.75rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+.lead {
+  margin: 1.1rem 0 0;
+  max-width: 34rem;
+  font-size: 1.04rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--ink) 86%, var(--steel));
+}
+.headline {
+  margin: 1.1rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 4.6vw, 1.6rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.headline + .lead {
+  margin-top: 0.5rem;
+  color: var(--steel);
+}
+.block {
+  margin-top: 1.6rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid var(--line);
+}
+.label {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+.strong {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.quiet {
+  margin: 0.1rem 0 0;
+  color: var(--steel);
+}
+.meta,
+.aside {
+  margin: 0.9rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--steel);
+}
+.tags li {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--wash);
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 1.4rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+.links a {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--steel);
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.links a:hover {
+  color: var(--ink);
+  border-color: var(--steel);
+}
+.links .demo {
+  color: var(--amber-bright);
+  border-color: var(--amber);
+}
+.highlights,
+.plain,
+.repos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.highlights li {
+  position: relative;
+  padding: 0.7rem 0 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.5;
+  color: var(--ink);
+}
+.highlights li:first-child {
+  padding-top: 0.2rem;
+}
+.highlights li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.highlights li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1.3rem;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--amber-bright);
+  box-shadow: 0 2px 7px -1px var(--amber);
+}
+.highlights li:first-child::before {
+  top: 0.8rem;
+}
+.plain li {
+  padding: 0.25rem 0;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+/* controls legend */
+.controls {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+.controls div {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr;
+  align-items: center;
+  gap: 0.9rem;
+}
+.controls dt {
+  display: flex;
+  gap: 0.25rem;
+}
+.controls dd {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--ink);
+}
+.controls kbd,
+.keycaps kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: var(--obsidian);
+  box-shadow: 0 2px 0 var(--line);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink);
+}
+.controls .wide {
+  min-width: 3.75rem;
+}
+
+/* the other repos */
+.repos {
+  margin-top: 1.2rem;
+}
+.repos li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.15rem 1rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+.repos h3 {
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.repos p:not(.links) {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.45;
+  color: var(--steel);
+}
+.repos .links {
+  margin: 0;
+  gap: 0 1rem;
+  font-size: 0.72rem;
+}
+.repos .links a {
+  border-bottom: 0;
+}
+
+/* profile */
+.pair {
+  display: grid;
+  gap: 1.4rem;
+  margin-top: 1.6rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 560px) {
+  .pair {
+    grid-template-columns: 1fr 1.2fr;
+    gap: 1.75rem;
+  }
+}
+
+/* skills */
+.skills {
+  margin: 1.2rem 0 0;
+}
+.skills div {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 420px) {
+  .skills div {
+    grid-template-columns: 7.2rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: baseline;
+  }
+}
+.skills dt {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.skills dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--steel);
+}
+.skills dd span {
+  padding: 0.18rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--wash);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1.6rem;
+}
+.contactLines {
+  margin: 1.6rem 0 0;
+  font-size: 0.9rem;
+}
+.contactLines div {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+.contactLines dt {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.9;
+  color: var(--steel);
+}
+.contactLines dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  color: var(--ink);
+  word-break: break-all;
+}
+.contactLines a {
+  transition: color 0.3s ease;
+}
+.contactLines a:hover {
+  color: var(--amber-bright);
+}
+
+/* ---- Plates ---- */
+.plate,
+.plateSteel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.7rem 1.25rem;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s ease, color 0.4s ease;
+}
+.plate {
+  border: 0;
+  color: var(--plate-ink);
+  background: linear-gradient(180deg, var(--amber-bright), var(--amber));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--amber-bright) 70%, white) inset,
+    0 14px 30px -12px color-mix(in srgb, var(--amber) 60%, transparent);
+}
+.plateSteel {
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--obsidian-hi), var(--obsidian));
+  box-shadow: 0 1px 0 var(--line) inset, 0 12px 26px -16px var(--cast);
+}
+.plate:hover,
+.plateSteel:hover {
+  transform: translateY(-2px);
+}
+.plateSteel:hover {
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  color: var(--amber-bright);
+}
+
+/* ---- Tour control: the whole exhibition, one button at a time ---- */
+.tour {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  bottom: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100% - 1.2rem);
+  padding: 0.4rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--obsidian) 92%, transparent);
+  box-shadow: 0 1px 0 var(--line) inset, 0 20px 40px -22px var(--cast);
+  transform: translateX(-50%);
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: none;
+  color: var(--steel);
+  cursor: pointer;
+  transition: color 0.3s ease, border-color 0.3s ease;
+}
+.step:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.where {
+  display: grid;
+  min-width: 6.5rem;
+  margin: 0;
+  padding: 0 0.4rem;
+  line-height: 1.25;
+}
+.count {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--amber-bright);
+}
+.whereName {
+  overflow: hidden;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.keys {
+  display: none;
+  position: absolute;
+  z-index: 15;
+  left: 1.25rem;
+  bottom: 1.2rem;
+  align-items: center;
+  gap: 0.8rem;
+  max-width: 22rem;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--steel);
+}
+.keycaps {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+@media (min-width: 900px) and (hover: hover) {
+  .keys {
+    display: flex;
+  }
+}
+
+/* ---- Read as a page ---- */
+.page {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 5rem;
+  line-height: 1.65;
+}
+.sheet {
+  padding: 3rem 0;
+  border-top: 1px solid var(--line);
+}
+.sheet:first-child {
+  border-top: 0;
+}
+.sheet .title {
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .plate,
+  .plateSteel {
+    transition: none;
+  }
+}

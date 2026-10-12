@@ -6,8 +6,8 @@ import { ui } from "@/lib/i18n";
 
 const links = [
   { href: "#work", key: "work" },
-  { href: "#about", key: "about" },
   { href: "#skills", key: "skills" },
+  { href: "#about", key: "about" },
   { href: "#contact", key: "contact" },
 ] as const;
 
@@ -29,52 +29,66 @@ function MoonIcon() {
 }
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
   const { lang, setLang, colorway, toggleColorway } = usePrefs();
   const t = ui[lang];
+  const [activeSection, setActiveSection] = useState<string>("top");
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    onScroll();
+    const onScroll = () => {
+      setScrolled(window.scrollY > 40);
+
+      const sectionIds = ["work", "skills", "about", "contact"];
+      const scrollY = window.scrollY + 200;
+
+      for (let i = sectionIds.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sectionIds[i]);
+        if (el && el.offsetTop <= scrollY) {
+          setActiveSection(sectionIds[i]);
+          return;
+        }
+      }
+      setActiveSection("top");
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${
-        scrolled ? "nav-scrolled" : ""
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "bg-vault/85 backdrop-blur-md border-b border-line shadow-lg shadow-black/20"
+          : "bg-transparent border-b border-transparent"
       }`}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-5">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
         <a href="#top" className="group flex min-w-0 items-center gap-2.5">
-          <span className="relative h-2.5 w-2.5 shrink-0 rounded-[1px] bg-gradient-to-b from-amber-bright to-amber shadow-[0_3px_12px_-3px_var(--amber)]" />
-          <span className="truncate font-display text-sm font-semibold tracking-tight text-ink">
+          <span className="relative h-2.5 w-2.5 shrink-0 rounded-[1px] bg-gradient-to-b from-amber-bright to-amber shadow-[0_0_12px_var(--amber)]" />
+          <span className="truncate font-display text-base font-semibold tracking-tight text-ink transition-colors group-hover:text-amber-bright">
             Hoàng Đức Duẫn
           </span>
         </a>
 
-        <div className="flex shrink-0 items-center gap-3">
-          <ul className="hidden items-center gap-1 md:flex">
+        <div className="flex shrink-0 items-center gap-4">
+          <ul className="hidden items-center gap-1.5 md:flex">
             {links.map((l) => (
               <li key={l.href}>
                 <a
                   href={l.href}
-                  className="rounded-[2px] px-3 py-2 text-sm text-steel transition-colors hover:text-ink"
+                  aria-current={activeSection === l.key ? "true" : undefined}
+                  className={`rounded-[3px] px-3.5 py-1.5 text-sm transition-all duration-200 ${
+                    activeSection === l.key
+                      ? "text-amber-bright font-medium bg-amber/10 border border-amber/20"
+                      : "text-steel hover:text-ink hover:bg-obsidian/60"
+                  }`}
                 >
                   {t.nav[l.key]}
                 </a>
               </li>
             ))}
           </ul>
-
-          {/* compact contact link when the full nav is hidden */}
-          <a
-            href="#contact"
-            className="hidden font-mono text-xs text-amber transition-colors hover:text-amber-bright min-[420px]:block md:hidden"
-          >
-            {t.navContact}
-          </a>
 
           <div className="pref-seg" role="group" aria-label={t.langLabel}>
             <button
