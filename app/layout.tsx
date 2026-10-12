@@ -26,7 +26,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: `${profile.name} — ${profile.title}`,
-  description: profile.summary.vi,
+  description: profile.summary.en,
 };
 
 // Apply the stored appearance before first paint so the day colorway never flashes dark.
@@ -39,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="vi"
+      lang="en"
       className={`${display.variable} ${body.variable} ${mono.variable}`}
       suppressHydrationWarning
     >

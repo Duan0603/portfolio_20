@@ -13,7 +13,7 @@ type Prefs = {
 };
 
 const PrefsContext = createContext<Prefs>({
-  lang: "vi",
+  lang: "en",
   colorway: "night",
   setLang: () => {},
   toggleColorway: () => {},
@@ -35,16 +35,14 @@ const write = (key: string, value: string) => {
 };
 
 export function PrefsProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("vi");
+  const [lang, setLangState] = useState<Lang>("en");
   const [colorway, setColorway] = useState<Colorway>("night");
 
-  // Pick up the stored choice; first-time visitors get their browser's language.
+  // Default is English; pick up stored choice if user explicitly toggled previously.
   useEffect(() => {
     const storedLang = read("lang");
     if (storedLang === "vi" || storedLang === "en") {
       setLangState(storedLang);
-    } else if (!navigator.language.toLowerCase().startsWith("vi")) {
-      setLangState("en");
     }
     if (read("colorway") === "day") setColorway("day");
   }, []);
