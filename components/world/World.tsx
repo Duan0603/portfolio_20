@@ -1,224 +1,27 @@
 "use client";
 
 import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { Environment, Lightformer, RoundedBox, useGLTF } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Environment, Lightformer, useGLTF } from "@react-three/drei";
+import { Bloom, EffectComposer, N8AO, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { KernelSize, ToneMappingMode } from "postprocessing";
 import * as THREE from "three";
 import type { Lang } from "@/lib/data";
-import { profile } from "@/lib/data";
+import Coast from "./Coast";
 import {
   BOUNDS,
   ROVER_R,
   game,
-  setTarget,
   obstacles,
-  propSpot,
   stations,
   step,
-  type Station,
 } from "./game";
-import { stationChips, stationNote, stationTitle } from "./copy";
 import type { Vehicle } from "./vehicles";
 
-const AMBER = "#f2bb6e";
-/* An exhibit board: landscape, leaning back so it meets the camera square-on. */
-const BOARD = { w: 6.8, h: 4.2, d: 0.3, tilt: 0.74 };
-
-const obsidian = new THREE.MeshPhysicalMaterial({
-  // honed, not mirror-polished: the headlight should wash a face, not burn a spot into it
-  color: "#1a2029",
-  metalness: 0.35,
-  roughness: 0.58,
-  clearcoat: 0.35,
-  clearcoatRoughness: 0.5,
-  envMapIntensity: 1.3,
-});
-const steel = new THREE.MeshStandardMaterial({ color: "#8d98a8", metalness: 0.75, roughness: 0.38 });
-const offcut = new THREE.MeshStandardMaterial({ color: "#59636f", metalness: 0.6, roughness: 0.45 });
+const AMBER = "#ffc687";
+/* a driftwood tone, so the knockable piles read as quayside clutter, not debris */
+const offcut = new THREE.MeshStandardMaterial({ color: "#a9825f", metalness: .05, roughness: .85 });
 const glow = new THREE.MeshBasicMaterial({ color: AMBER, toneMapped: false });
-
-/* ---- Text drawn to textures, in the page's own typefaces ---- */
-
-function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number) {
-  const lines: string[] = [];
-  let line = "";
-  for (const word of text.split(" ")) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && ctx.measureText(next).width > max) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function texture(canvas: HTMLCanvasElement) {
-  const t = new THREE.CanvasTexture(canvas);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-
-/**
- * A board's face, drawn as a lit display: where it sits in the tour, its title
- * as large as the board allows, a line of detail, and its technologies as tags.
- */
-function boardFace(title: string, note: string, chips: string[], index: number) {
-  const W = 1360;
-  const H = 840;
-  const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
-  const ctx = c.getContext("2d")!;
-  ctx.textBaseline = "top";
-
-  const ground = ctx.createLinearGradient(0, 0, W, H);
-  ground.addColorStop(0, "#232a35");
-  ground.addColorStop(0.55, "#181d25");
-  ground.addColorStop(1, "#11151b");
-  ctx.fillStyle = ground;
-  ctx.fillRect(0, 0, W, H);
-  // the lit top edge
-  const edge = ctx.createLinearGradient(0, 0, W, 0);
-  edge.addColorStop(0, AMBER);
-  edge.addColorStop(0.6, "rgba(242,187,110,0.35)");
-  edge.addColorStop(1, "rgba(242,187,110,0)");
-  ctx.fillStyle = edge;
-  ctx.fillRect(0, 0, W, 8);
-
-  const pad = 84;
-  ctx.fillStyle = AMBER;
-  ctx.font = `500 38px ${game.fonts.mono}`;
-  ctx.fillText(`${String(index + 1).padStart(2, "0")} / ${String(stations.length).padStart(2, "0")}`, pad, 78);
-
-  // the title takes the largest size that keeps it to two lines
-  let size = 168;
-  let lines: string[] = [];
-  for (; size >= 96; size -= 12) {
-    ctx.font = `800 ${size}px ${game.fonts.display}`;
-    lines = wrapLines(ctx, title, W - pad * 2);
-    if (lines.length <= 2) break;
-  }
-  ctx.fillStyle = "#eef1f5";
-  let y = 168;
-  for (const line of lines.slice(0, 2)) {
-    ctx.fillText(line, pad - 4, y);
-    y += size * 1.02;
-  }
-
-  if (note) {
-    ctx.fillStyle = "#aab4c0";
-    ctx.font = `400 40px ${game.fonts.body}`;
-    y += 22;
-    for (const line of wrapLines(ctx, note, W - pad * 2).slice(0, 2)) {
-      ctx.fillText(line, pad, y);
-      y += 54;
-    }
-  }
-
-  // tags along the foot of the board
-  ctx.font = `400 32px ${game.fonts.mono}`;
-  ctx.textBaseline = "middle";
-  let x = pad;
-  const row = H - 118;
-  for (const chip of chips) {
-    const w = ctx.measureText(chip).width + 44;
-    if (x + w > W - pad) break;
-    ctx.fillStyle = "rgba(151,163,176,0.1)";
-    ctx.strokeStyle = "rgba(151,163,176,0.34)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.rect(x, row - 30, w, 60);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#c3ccd6";
-    ctx.fillText(chip, x + 22, row + 2);
-    x += w + 14;
-  }
-  return texture(c);
-}
-
-/** The bay number, painted on the floor where the rover pulls up. */
-function bayNumber(index: number, day: boolean) {
-  const c = document.createElement("canvas");
-  c.width = c.height = 256;
-  const ctx = c.getContext("2d")!;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = day ? "#8a5412" : AMBER;
-  ctx.font = `800 150px ${game.fonts.display}`;
-  ctx.fillText(String(index + 1).padStart(2, "0"), 128, 136);
-  return texture(c);
-}
-
-function floorLabel(lines: [string, string], day: boolean) {
-  const c = document.createElement("canvas");
-  c.width = 2048;
-  c.height = 640;
-  const ctx = c.getContext("2d")!;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = day ? "#16181c" : "#eef1f5";
-  ctx.font = `800 250px ${game.fonts.display}`;
-  ctx.fillText(lines[0], 1024, 250);
-  ctx.fillStyle = day ? "#8a5412" : AMBER;
-  ctx.font = `400 64px ${game.fonts.mono}`;
-  ctx.fillText(lines[1], 1024, 500);
-  return texture(c);
-}
-
-/* ---- The hall ---- */
-
-function Floor({ day }: { day: boolean }) {
-  const grid = useMemo(() => {
-    const c = document.createElement("canvas");
-    c.width = c.height = 256;
-    const ctx = c.getContext("2d")!;
-    ctx.fillStyle = day ? "#e3dfd8" : "#1c2129";
-    ctx.fillRect(0, 0, 256, 256);
-    // milled joints between the floor plates
-    ctx.strokeStyle = day ? "rgba(74,81,90,0.28)" : "rgba(151,163,176,0.2)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, 254, 254);
-    const t = texture(c);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(60, 60);
-    return t;
-  }, [day]);
-
-  const onDown = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation();
-    setTarget(
-      Math.min(BOUNDS.x, Math.max(-BOUNDS.x, e.point.x)),
-      Math.min(BOUNDS.south, Math.max(BOUNDS.north, e.point.z))
-    );
-  };
-
-  return (
-    <mesh rotation-x={-Math.PI / 2} receiveShadow onPointerDown={onDown}>
-      <planeGeometry args={[240, 240]} />
-      <meshStandardMaterial map={grid} metalness={day ? 0.1 : 0.3} roughness={day ? 0.8 : 0.62} />
-    </mesh>
-  );
-}
-
-/** The name, set into the floor where the visitor arrives. */
-function Threshold({ lang, day }: { lang: Lang; day: boolean }) {
-  const map = useMemo(
-    () => floorLabel([profile.name, `${profile.title} / ${profile.location[lang]}`], day),
-    [lang, day]
-  );
-  useEffect(() => () => map.dispose(), [map]);
-  return (
-    <mesh rotation-x={-Math.PI / 2} position={[0, 0.02, -3.2]}>
-      <planeGeometry args={[14, 4.375]} />
-      <meshBasicMaterial map={map} transparent depthWrite={false} toneMapped={false} />
-    </mesh>
-  );
-}
 
 /** Where the self-driving rover is headed. */
 function Marker() {
@@ -235,200 +38,6 @@ function Marker() {
       <ringGeometry args={[0.42, 0.52, 40]} />
       <primitive object={glow} attach="material" />
     </mesh>
-  );
-}
-
-/* ---- Exhibits ---- */
-
-/** A small object beside each slab that says what the exhibit is about. */
-function Prop({ station }: { station: Station }) {
-  const spin = useRef<THREE.Group>(null);
-  useFrame((_, dt) => {
-    if (spin.current) spin.current.rotation.y += dt * 0.35;
-  });
-  const name = station.project?.name ?? "";
-
-  if (station.kind === "project" && name.includes("Cinema")) {
-    // the seat map, with one lit SweetBox pair
-    return (
-      <group>
-        {[0, 1, 2].flatMap((r) =>
-          [0, 1, 2, 3].map((c) => {
-            const lit = r === 2 && (c === 1 || c === 2);
-            return (
-              <mesh key={`${r}-${c}`} position={[(c - 1.5) * 0.5, 0.2 + r * 0.16, (r - 1) * 0.55]} castShadow material={lit ? glow : obsidian}>
-                <boxGeometry args={[0.4, 0.4, 0.4]} />
-              </mesh>
-            );
-          })
-        )}
-      </group>
-    );
-  }
-  if (station.kind === "project" && name.includes("Waste")) {
-    // three sorting bins under a camera arm
-    return (
-      <group>
-        {[-0.75, 0, 0.75].map((x, i) => (
-          <group key={x} position={[x, 0, 0]}>
-            <mesh position={[0, 0.45, 0]} castShadow material={obsidian}>
-              <cylinderGeometry args={[0.32, 0.26, 0.9, 20, 1, true]} />
-            </mesh>
-            {i === 1 && (
-              <mesh position={[0, 0.9, 0]} rotation-x={Math.PI / 2} material={glow}>
-                <torusGeometry args={[0.32, 0.025, 8, 32]} />
-              </mesh>
-            )}
-          </group>
-        ))}
-        <mesh position={[-1.25, 0.9, 0]} castShadow material={steel}>
-          <boxGeometry args={[0.08, 1.8, 0.08]} />
-        </mesh>
-        <mesh position={[-0.6, 1.8, 0]} castShadow material={steel}>
-          <boxGeometry args={[1.4, 0.08, 0.08]} />
-        </mesh>
-      </group>
-    );
-  }
-  if (station.kind === "project") {
-    // a barbell on its rack
-    return (
-      <group>
-        {[-0.55, 0.55].map((x) => (
-          <mesh key={x} position={[x, 0.5, 0]} castShadow material={steel}>
-            <boxGeometry args={[0.1, 1, 0.1]} />
-          </mesh>
-        ))}
-        <mesh position={[0, 1.05, 0]} rotation-z={Math.PI / 2} castShadow material={steel}>
-          <cylinderGeometry args={[0.04, 0.04, 2.4, 12]} />
-        </mesh>
-        {[-1, -0.86, 0.86, 1].map((x) => (
-          <mesh key={x} position={[x, 1.05, 0]} rotation-z={Math.PI / 2} castShadow material={obsidian}>
-            <cylinderGeometry args={[0.42, 0.42, 0.1, 28]} />
-          </mesh>
-        ))}
-      </group>
-    );
-  }
-  if (station.kind === "repos") {
-    // one small slab per repo
-    return (
-      <group>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <mesh key={i} position={[(i - 2.5) * 0.42, 0.55 + (i % 2) * 0.12, Math.sin(i * 1.7) * 0.25]} rotation-y={(i - 2.5) * 0.12} castShadow material={obsidian}>
-            <boxGeometry args={[0.3, 1.1 + (i % 2) * 0.24, 0.8]} />
-          </mesh>
-        ))}
-      </group>
-    );
-  }
-  if (station.kind === "skills") {
-    // the full stack, literally: six slabs with light in the seams
-    return (
-      <group ref={spin}>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <group key={i} position={[0, 0.2 + i * 0.36, 0]} rotation-y={i * 0.22}>
-            <mesh castShadow material={obsidian}>
-              <boxGeometry args={[1.3 - i * 0.04, 0.28, 1.3 - i * 0.04]} />
-            </mesh>
-            <mesh position={[0, 0.18, 0]} material={glow}>
-              <boxGeometry args={[1.05, 0.03, 1.05]} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-    );
-  }
-  if (station.kind === "contact") {
-    // a beacon: the one lit plate in the hall
-    return (
-      <group>
-        <mesh position={[0, 1.3, 0]} castShadow material={obsidian}>
-          <boxGeometry args={[0.5, 2.6, 0.5]} />
-        </mesh>
-        <mesh position={[0, 2.75, 0]} material={glow}>
-          <boxGeometry args={[0.62, 0.3, 0.62]} />
-        </mesh>
-        <pointLight position={[0, 2.9, 0]} color={AMBER} intensity={14} distance={9} />
-      </group>
-    );
-  }
-  // profile: a single cut shard, turning
-  return (
-    <group>
-      <mesh position={[0, 0.3, 0]} castShadow material={steel}>
-        <boxGeometry args={[0.9, 0.6, 0.9]} />
-      </mesh>
-      <group ref={spin} position={[0, 1.35, 0]}>
-        <mesh castShadow material={obsidian} scale={[0.55, 0.8, 0.55]}>
-          <octahedronGeometry args={[1, 0]} />
-        </mesh>
-      </group>
-    </group>
-  );
-}
-
-function Exhibit({ station, index, lang, day }: { station: Station; index: number; lang: Lang; day: boolean }) {
-  const face = useMemo(
-    () => boardFace(stationTitle(station, lang), stationNote(station, lang), stationChips(station, lang), index),
-    [station, index, lang]
-  );
-  const bay = useMemo(() => bayNumber(index, day), [index, day]);
-  useEffect(() => () => face.dispose(), [face]);
-  useEffect(() => () => bay.dispose(), [bay]);
-
-  const screen = useRef<THREE.MeshBasicMaterial>(null!);
-  const ring = useRef<THREE.MeshBasicMaterial>(null!);
-  const number = useRef<THREE.MeshBasicMaterial>(null!);
-  const level = useRef(0);
-  useFrame((_, dt) => {
-    // the board and the bay in front of it wake as the rover pulls up
-    level.current += ((game.active === index ? 1 : 0) - level.current) * (1 - Math.exp(-dt * 5));
-    const on = level.current;
-    screen.current.color.setScalar(0.62 + on * 0.38);
-    ring.current.opacity = 0.2 + on * 0.8;
-    number.current.opacity = 0.22 + on * 0.5;
-  });
-
-  const { w, h, d, tilt } = BOARD;
-  const rise = Math.cos(tilt) * h;
-  const run = Math.sin(tilt) * h;
-  const front = 1.1; // how far the board's foot stands in front of the station's centre
-  const prop = propSpot(station);
-  return (
-    <>
-      <group position={[station.x, 0, station.z]} rotation-y={station.rot}>
-        {/* plinth, with the light caught under it */}
-        <mesh position={[0, 0.06, front - (run + 0.5) / 2]} material={glow}>
-          <boxGeometry args={[w * 0.96, 0.12, (run + 0.5) * 0.9]} />
-        </mesh>
-        <RoundedBox args={[w, 0.5, run + 0.5]} radius={0.04} smoothness={2} position={[0, 0.37, front - (run + 0.5) / 2]} castShadow receiveShadow material={obsidian} />
-        {/* the wall the board leans back on */}
-        <RoundedBox args={[w, rise + 0.3, 0.3]} radius={0.04} smoothness={2} position={[0, 0.62 + (rise + 0.3) / 2, front - run - 0.2]} castShadow material={obsidian} />
-        <group position={[0, 0.62 + rise / 2, front - run / 2]} rotation-x={-tilt}>
-          <RoundedBox args={[w, h, d]} radius={0.03} smoothness={2} castShadow material={obsidian} />
-          <mesh position={[0, 0, d / 2 + 0.01]}>
-            <planeGeometry args={[w - 0.16, h - 0.16]} />
-            <meshBasicMaterial ref={screen} map={face} toneMapped={false} />
-          </mesh>
-        </group>
-      </group>
-
-      <group position={[station.px, 0, station.pz]} rotation-y={station.rot}>
-        <mesh position={[0, 0.025, 0]} rotation-x={-Math.PI / 2}>
-          <ringGeometry args={[1.9, 2, 64]} />
-          <meshBasicMaterial ref={ring} color={AMBER} transparent opacity={0.2} toneMapped={false} />
-        </mesh>
-        <mesh position={[0, 0.02, 3.1]} rotation-x={-Math.PI / 2}>
-          <planeGeometry args={[2.4, 2.4]} />
-          <meshBasicMaterial ref={number} map={bay} transparent opacity={0.22} depthWrite={false} toneMapped={false} />
-        </mesh>
-      </group>
-
-      <group position={[prop.x, 0, prop.z]} rotation-y={station.rot}>
-        <Prop station={station} />
-      </group>
-    </>
   );
 }
 
@@ -559,50 +168,71 @@ function Offcuts() {
 
 const MARKS = 260;
 
-function Skids({ day }: { day: boolean }) {
-  const mesh = useRef<THREE.InstancedMesh>(null!);
-  const next = useRef(0);
-  const lastAt = useRef({ x: game.x, z: game.z });
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+type Tread = { x: number; z: number; laid: boolean; lx: number; lz: number; rx: number; rz: number };
 
-  useEffect(() => {
-    // park every mark under the floor until it is laid
-    dummy.position.set(0, -5, 0);
-    dummy.updateMatrix();
-    for (let i = 0; i < MARKS; i++) mesh.current.setMatrixAt(i, dummy.matrix);
-    mesh.current.instanceMatrix.needsUpdate = true;
-  }, [dummy]);
+function Skids({ day }: { day: boolean }) {
+  const next = useRef(0);
+  // where each rear wheel was, and whether a trail is running from it (then with the two edges of its tread)
+  const wheels = useRef<(Tread | null)[]>([null, null]);
+  const geometry = useMemo(() => {
+    // one quad per segment; each starts on the edge the one before it ended, so a trail is a single unbroken ribbon
+    const g = new THREE.BufferGeometry();
+    const position = new THREE.BufferAttribute(new Float32Array(MARKS * 4 * 3).fill(-5), 3);
+    position.setUsage(THREE.DynamicDrawUsage);
+    const index: number[] = [];
+    for (let i = 0; i < MARKS; i++) index.push(i * 4, i * 4 + 2, i * 4 + 1, i * 4 + 1, i * 4 + 2, i * 4 + 3);
+    g.setAttribute("position", position);
+    g.setIndex(index);
+    return g;
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   useFrame(() => {
     const g = game;
     const sliding = Math.abs(g.slide) > 2.2 || (g.braking && Math.abs(g.forward) > 4);
-    const moved = Math.hypot(g.x - lastAt.current.x, g.z - lastAt.current.z);
-    if (!sliding) {
-      lastAt.current = { x: g.x, z: g.z };
-      return;
-    }
-    if (moved < 0.32) return;
-    lastAt.current = { x: g.x, z: g.z };
-
     const fx = Math.sin(g.h);
     const fz = Math.cos(g.h);
-    const along = Math.atan2(g.vx, g.vz);
-    for (const side of [-0.62, 0.62]) {
-      // under each rear wheel, pointing the way the car is actually travelling
-      dummy.position.set(g.x + fz * side - fx * 0.58, 0.012, g.z - fx * side - fz * 0.58);
-      dummy.rotation.set(-Math.PI / 2, 0, -along);
-      dummy.updateMatrix();
-      mesh.current.setMatrixAt(next.current, dummy.matrix);
+    const position = geometry.attributes.position as THREE.BufferAttribute;
+    [-0.62, 0.62].forEach((side, w) => {
+      // under each rear wheel, followed every frame so a slide marks the ground from its very first frame
+      const x = g.x + fz * side - fx * 0.58;
+      const z = g.z - fx * side - fz * 0.58;
+      const last = wheels.current[w];
+      if (!sliding || !last) {
+        wheels.current[w] = { x, z, laid: false, lx: x, lz: z, rx: x, rz: z };
+        return;
+      }
+      const dx = x - last.x;
+      const dz = z - last.z;
+      const length = Math.hypot(dx, dz);
+      // let a running trail grow in steps rather than a sliver per frame; skip a jump too long to be a tyre's path
+      if ((last.laid && length < 0.25) || length < 0.001) return;
+      if (length > 4) {
+        wheels.current[w] = { x, z, laid: false, lx: x, lz: z, rx: x, rz: z };
+        return;
+      }
+      // the tread runs across the direction the tyre is actually moving
+      const nx = (-dz / length) * 0.1;
+      const nz = (dx / length) * 0.1;
+      const here = { x, z, laid: true, lx: x + nx, lz: z + nz, rx: x - nx, rz: z - nz };
+      // a new trail starts square; a running one picks up exactly where its last segment ended
+      const from = last.laid ? last : { lx: last.x + nx, lz: last.z + nz, rx: last.x - nx, rz: last.z - nz };
+      // above the asphalt (.027), the lawn (.018) and the lane dashes (.036), below the lamp pools
+      const q = next.current * 4;
+      position.setXYZ(q, from.lx, 0.045, from.lz);
+      position.setXYZ(q + 1, from.rx, 0.045, from.rz);
+      position.setXYZ(q + 2, here.lx, 0.045, here.lz);
+      position.setXYZ(q + 3, here.rx, 0.045, here.rz);
       next.current = (next.current + 1) % MARKS;
-    }
-    mesh.current.instanceMatrix.needsUpdate = true;
+      position.needsUpdate = true;
+      wheels.current[w] = here;
+    });
   });
 
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, MARKS]} frustumCulled={false}>
-      <planeGeometry args={[0.2, 0.42]} />
-      <meshBasicMaterial color={day ? "#3a3d42" : "#05070a"} transparent opacity={day ? 0.35 : 0.7} depthWrite={false} />
-    </instancedMesh>
+    <mesh geometry={geometry} frustumCulled={false}>
+      <meshBasicMaterial color={day ? "#15171a" : "#05070a"} transparent opacity={day ? 0.55 : 0.75} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-2} />
+    </mesh>
   );
 }
 
@@ -911,63 +541,87 @@ function Rig({ day }: { day: boolean }) {
     look.current.z += (fz + game.vz * 0.35 + game.shiftZ - look.current.z) * k;
     const pace = Math.min(1, Math.hypot(game.vx, game.vz) / 19);
     zoom.current += (1 + pace * 0.16 - zoom.current) * (1 - Math.exp(-dt * 2));
-    camera.position.set(look.current.x, 19 * back * zoom.current, look.current.z + 17 * back * zoom.current);
-    camera.lookAt(look.current);
+    const overview = game.active === 0 && !game.target && Math.hypot(game.vx, game.vz) < .3;
+    const destination = overview
+      ? new THREE.Vector3(12, 53 * back, 61 * back)
+      : new THREE.Vector3(look.current.x + 6, 20 * back * zoom.current, look.current.z + 21 * back * zoom.current);
+    camera.position.lerp(destination, k);
+    camera.lookAt(overview ? new THREE.Vector3(2, 0, -12) : look.current);
 
     // the shadow frustum travels with the rover
-    sun.current.position.set(game.x - 9, 18, game.z + 8);
+    sun.current.position.set(game.x - 18, 36, game.z + 16);
     aim.current.position.set(game.x, 0, game.z);
   });
 
   return (
     <>
-      <ambientLight intensity={day ? 1.1 : 0.7} color={day ? "#f3efe8" : "#5b6a82"} />
-      <hemisphereLight args={[day ? "#ffffff" : "#93a7c8", day ? "#cfc8bb" : "#1c1610", day ? 0.6 : 1.1]} />
+      {/* low fill and a strong low sun: the contrast between lit faces and shade is what reads as daylight */}
+      <ambientLight intensity={day ? .26 : .7} color={day ? "#e8f0f2" : "#5c7a85"} />
+      <hemisphereLight args={[day ? "#bfe0ef" : "#6a8fa3", day ? "#7a6a4c" : "#33403c", day ? .7 : .95]} />
       <directionalLight
         ref={sun}
-        color={day ? "#fff4e2" : "#dfe6f5"}
-        intensity={day ? 2.2 : 2.6}
+        color={day ? "#ffe8c2" : "#9fb8d4"}
+        intensity={day ? 2.7 : 1.8}
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-18}
-        shadow-camera-right={18}
-        shadow-camera-top={18}
-        shadow-camera-bottom={-18}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-50}
+        shadow-camera-right={50}
+        shadow-camera-top={50}
+        shadow-camera-bottom={-50}
         shadow-camera-near={1}
-        shadow-camera-far={60}
-        shadow-bias={-0.0006}
+        shadow-camera-far={110}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.03}
       />
       <object3D ref={aim} />
     </>
   );
 }
 
-export default function World({ lang, day, vehicle }: { lang: Lang; day: boolean; vehicle: Vehicle }) {
-  const ground = day ? "#e9e6e0" : "#0b0e12";
+export default function World({ lang, day, vehicle, onReady, onFailure }: { lang: Lang; day: boolean; vehicle: Vehicle; onReady: () => void; onFailure: () => void }) {
+  const ground = day ? "#a9cad3" : "#16303a";
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => () => { canvas.current?.removeEventListener("webglcontextlost", onFailure); }, [onFailure]);
   return (
     <Canvas
-      shadows
+      shadows="soft"
       dpr={[1, 1.5]}
       gl={{ antialias: true, powerPreference: "high-performance" }}
-      camera={{ fov: 40, near: 0.5, far: 200, position: [0, 19, 19] }}
+      camera={{ fov: 40, near: 0.5, far: 450, position: [12, 53, 61] }}
+      onCreated={({ gl }) => {
+        canvas.current = gl.domElement;
+        gl.domElement.addEventListener("webglcontextlost", onFailure);
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = day ? 1.05 : 1.2;
+        onReady();
+      }}
     >
       <color attach="background" args={[ground]} />
-      <fog attach="fog" args={[ground, 42, 110]} />
+      <fog attach="fog" args={[ground, 110, 320]} />
       <Rig day={day} />
 
-      <Floor day={day} />
-      <Threshold lang={lang} day={day} />
+      <Coast lang={lang} day={day} />
       <Marker />
-      {stations.map((s, i) => (i === 0 ? null : <Exhibit key={s.id} station={s} index={i} lang={lang} day={day} />))}
       <Skids day={day} />
       <Offcuts />
       <Car vehicle={vehicle} />
 
-      <Environment resolution={256}>
+      <Environment resolution={512}>
         <Lightformer intensity={1.6} color={AMBER} position={[-6, 5, 6]} scale={[10, 10, 1]} />
         <Lightformer intensity={0.7} color="#8ea3bd" position={[8, 2, -6]} scale={[8, 8, 1]} />
         <Lightformer intensity={0.25} color="#1a202c" position={[0, -5, 2]} scale={[14, 8, 1]} />
       </Environment>
+
+      {/* day lighting already sits near 1.0 pre-tonemap across the open sand, so a luminance-threshold
+          bloom there blows out the whole platform; bloom only reads clean against night's dim ambient,
+          picking out the headlights, lamps and the amber wayfinding strip as actual small light sources */}
+      <EffectComposer multisampling={4} enableNormalPass={false}>
+        {/* ambient occlusion seats things on the ground: dark creases under palms, pavilions and the car */}
+        <N8AO halfRes aoRadius={2.2} distanceFalloff={1} intensity={day ? 2.4 : 1.6} color="#1d2a2a" quality="medium" />
+        <Bloom mipmapBlur kernelSize={KernelSize.SMALL} luminanceThreshold={0.97} luminanceSmoothing={0.05} intensity={day ? 0 : 0.4} radius={0.3} />
+        <Vignette eskil={false} offset={0.18} darkness={day ? 0.18 : 0.4} />
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+      </EffectComposer>
     </Canvas>
   );
 }

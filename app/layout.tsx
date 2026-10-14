@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { profile } from "@/lib/data";
 import { PrefsProvider } from "@/lib/prefs";
@@ -24,6 +24,8 @@ const mono = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
+const coast = Instrument_Sans({ subsets: ["latin", "latin-ext"], variable: "--font-coast", display: "swap", weight: ["500", "600", "700"] });
+
 export const metadata: Metadata = {
   title: `${profile.name} — ${profile.title}`,
   description: profile.summary.en,
@@ -40,7 +42,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      className={`${display.variable} ${body.variable} ${mono.variable} ${coast.variable}`}
       suppressHydrationWarning
     >
       <head>
