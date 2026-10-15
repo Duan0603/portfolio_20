@@ -1,9 +1,9 @@
 "use client";
 
 import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, useGLTF } from "@react-three/drei";
-import { Bloom, EffectComposer, N8AO, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { KernelSize, ToneMappingMode } from "postprocessing";
 import * as THREE from "three";
 import type { Lang } from "@/lib/data";
@@ -518,6 +518,7 @@ function Car({ vehicle }: { vehicle: Vehicle }) {
 /* ---- Light and camera ---- */
 
 function Rig({ day }: { day: boolean }) {
+  const shadowSize = useThree(({ size }) => size.width >= 900 ? 4096 : 2048);
   const sun = useRef<THREE.DirectionalLight>(null!);
   const aim = useRef<THREE.Object3D>(null!);
   const look = useRef(new THREE.Vector3(game.x, 1.2, game.z - 3));
@@ -525,7 +526,10 @@ function Rig({ day }: { day: boolean }) {
 
   useEffect(() => {
     sun.current.target = aim.current;
-  }, []);
+    // Reallocate the shadow target when crossing the desktop breakpoint.
+    sun.current.shadow.map?.dispose();
+    sun.current.shadow.map = null;
+  }, [shadowSize]);
 
   useFrame(({ camera, size }, delta) => {
     const dt = Math.min(delta, 0.05);
@@ -563,7 +567,7 @@ function Rig({ day }: { day: boolean }) {
         color={day ? "#ffe8c2" : "#9fb8d4"}
         intensity={day ? 2.7 : 1.8}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[shadowSize, shadowSize]}
         shadow-camera-left={-50}
         shadow-camera-right={50}
         shadow-camera-top={50}
@@ -621,6 +625,8 @@ export default function World({ lang, day, vehicle, onReady, onFailure }: { lang
         <Bloom mipmapBlur kernelSize={KernelSize.SMALL} luminanceThreshold={0.97} luminanceSmoothing={0.05} intensity={day ? 0 : 0.4} radius={0.3} />
         <Vignette eskil={false} offset={0.18} darkness={day ? 0.18 : 0.4} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        {/* Smooth thin lamp posts, lane markings and shadow edges after tone mapping. */}
+        <SMAA />
       </EffectComposer>
     </Canvas>
   );
