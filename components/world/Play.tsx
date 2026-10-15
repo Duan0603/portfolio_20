@@ -76,6 +76,7 @@ export default function Play() {
       document.fonts.load(`700 100px ${display}`, "Hoàng Đức Duẫn"),
       document.fonts.load(`400 30px ${mono}`, "Đà Nẵng"),
       document.fonts.load(`400 40px ${body}`, "Đà Nẵng"),
+      document.fonts.load(`600 40px ${body}`, "Hồ sơ Kỹ năng Cinema Smart Waste Fitnexus GitHub Liên hệ"),
     ]).catch(() => {}).then(() => { if (current) setReady(true); });
     return () => { current = false; };
   }, []);

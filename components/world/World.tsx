@@ -560,12 +560,12 @@ function Rig({ day }: { day: boolean }) {
   return (
     <>
       {/* low fill and a strong low sun: the contrast between lit faces and shade is what reads as daylight */}
-      <ambientLight intensity={day ? .26 : .7} color={day ? "#e8f0f2" : "#5c7a85"} />
+      <ambientLight intensity={day ? .38 : .9} color={day ? "#e8f0f2" : "#7d9297"} />
       <hemisphereLight args={[day ? "#bfe0ef" : "#6a8fa3", day ? "#7a6a4c" : "#33403c", day ? .7 : .95]} />
       <directionalLight
         ref={sun}
         color={day ? "#ffe8c2" : "#9fb8d4"}
-        intensity={day ? 2.7 : 1.8}
+        intensity={day ? 2.2 : 1.25}
         castShadow
         shadow-mapSize={[shadowSize, shadowSize]}
         shadow-camera-left={-50}
@@ -621,9 +621,9 @@ export default function World({ lang, day, vehicle, onReady, onFailure }: { lang
           picking out the headlights, lamps and the amber wayfinding strip as actual small light sources */}
       <EffectComposer multisampling={4} enableNormalPass={false}>
         {/* ambient occlusion seats things on the ground: dark creases under palms, pavilions and the car */}
-        <N8AO halfRes aoRadius={2.2} distanceFalloff={1} intensity={day ? 2.4 : 1.6} color="#1d2a2a" quality="medium" />
-        <Bloom mipmapBlur kernelSize={KernelSize.SMALL} luminanceThreshold={0.97} luminanceSmoothing={0.05} intensity={day ? 0 : 0.4} radius={0.3} />
-        <Vignette eskil={false} offset={0.18} darkness={day ? 0.18 : 0.4} />
+        <N8AO halfRes aoRadius={1.1} distanceFalloff={1} intensity={day ? 1.1 : .8} color="#283735" quality="medium" />
+        <Bloom mipmapBlur kernelSize={KernelSize.SMALL} luminanceThreshold={1.2} luminanceSmoothing={0.1} intensity={day ? 0 : .13} radius={0.3} />
+        <Vignette eskil={false} offset={0.18} darkness={day ? 0.14 : .24} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
         {/* Smooth thin lamp posts, lane markings and shadow edges after tone mapping. */}
         <SMAA />

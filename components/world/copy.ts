@@ -138,6 +138,15 @@ export function stationShort(s: Station, lang: Lang) {
   return stationTitle(s, lang);
 }
 
+/** Short, recognizable names for physical signs viewed across the promenade. */
+export function stationSign(s: Station, lang: Lang) {
+  if (s.kind === "repos") return "GitHub";
+  if (s.project?.name === "Cinema Ticket Booking Platform") return "Cinema";
+  if (s.project?.name === "Smart Waste Sorting System") return "Smart Waste";
+  if (s.project?.name === "FitnexusApp") return "Fitnexus";
+  return stationShort(s, lang);
+}
+
 /** The line of detail on a board, under its title. */
 export function stationNote(s: Station, lang: Lang) {
   switch (s.kind) {

@@ -1,20 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import type { Lang } from "@/lib/data";
 import { BOUNDS, driveTo, game, obstacles, propSpot, setTarget, stations, type Station } from "./game";
-import { stationShort } from "./copy";
+import { stationSign } from "./copy";
 
 const SAND = "#e8dfc9";
-const NIGHT_SAND = "#7f8f94";
 const INK = "#183d45";
-const NIGHT_INK = "#0a1b20";
-const ORANGE = "#ef874a";
-const sandTone = (day: boolean) => day ? SAND : NIGHT_SAND;
-const inkTone = (day: boolean) => day ? INK : NIGHT_INK;
 const accents = ["#cb7753", "#7b987d", "#487b88", "#d17851", "#639081", "#6d8ea0", "#a89775", "#d78b53"];
 
 /* The quay's footprint, so the water knows where it breaks against the wall */
@@ -176,32 +171,32 @@ function speckle(ctx: CanvasRenderingContext2D, rand: () => number, size: number
 
 /* sandstone slabs in a running bond, each a slightly different stone */
 const paving = () => surface(512, (ctx, rand) => {
-  ctx.fillStyle = "#8f8676"; ctx.fillRect(0, 0, 512, 512);
+  ctx.fillStyle = "#a49c8d"; ctx.fillRect(0, 0, 512, 512);
   const rows = 8, h = 512 / rows;
   for (let r = 0; r < rows; r++) {
     const w = 128, shift = r % 2 ? w / 2 : 0;
     for (let c = -1; c < 512 / w + 1; c++) {
-      const l = 74 + rand() * 12, hue = 36 + rand() * 10;
+      const l = 75 + rand() * 5, hue = 36 + rand() * 7;
       ctx.fillStyle = `hsl(${hue} ${18 + rand() * 10}% ${l}%)`;
-      ctx.fillRect(c * w + shift + 2, r * h + 2, w - 4, h - 4);
+      ctx.fillRect(c * w + shift + 1, r * h + 1, w - 2, h - 2);
     }
   }
-  speckle(ctx, rand, 512, 9000, ["#6f6656", "#b9ae98", "#5d5546", "#d8cfbd"]);
+  speckle(ctx, rand, 512, 9000, ["#b0a693", "#b9ae98", "#a29a8a", "#d0c6b1"]);
 }, 1 / 7);
 
-const asphalt = () => surface(256, (ctx, rand) => {
-  ctx.fillStyle = "#56595b"; ctx.fillRect(0, 0, 256, 256);
-  speckle(ctx, rand, 256, 7000, ["#2f3133", "#7b7d7c", "#45484a", "#8e8b84"]);
+const asphalt = () => surface(512, (ctx, rand) => {
+  ctx.fillStyle = "#53585a"; ctx.fillRect(0, 0, 512, 512);
+  speckle(ctx, rand, 512, 28000, ["#454a4c", "#65696a", "#4d5254", "#737470"]);
 });
 
-const lawn = () => surface(256, (ctx, rand) => {
+const lawn = () => surface(512, (ctx, rand) => {
   // mown in stripes, light and dark, then scattered with blades of every shade
-  for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#52773a" : "#5a7f3f"; ctx.fillRect(i * 64, 0, 64, 256); }
-  for (let i = 0; i < 2600; i++) {
-    const x = rand() * 256, y = rand() * 256, l = 22 + rand() * 22;
-    ctx.strokeStyle = `hsl(${88 + rand() * 22} ${38 + rand() * 18}% ${l}%)`;
-    ctx.globalAlpha = .55; ctx.lineWidth = 1 + rand();
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (rand() - .5) * 3, y - 3 - rand() * 5); ctx.stroke();
+  for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#526b3d" : "#586f41"; ctx.fillRect(i * 128, 0, 128, 512); }
+  for (let i = 0; i < 11000; i++) {
+    const x = rand() * 512, y = rand() * 512, l = 24 + rand() * 16;
+    ctx.strokeStyle = `hsl(${78 + rand() * 28} ${26 + rand() * 16}% ${l}%)`;
+    ctx.globalAlpha = .35; ctx.lineWidth = .6 + rand();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (rand() - .5) * 2, y - 2 - rand() * 4); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }, 1 / 5);
@@ -237,19 +232,33 @@ function trunkGeometry() {
 
 /** One frond: a spine that arcs up and falls away, with leaflets swept forward and folded into a V. */
 function frondGeometry() {
-  const steps = 18, length = 3.3;
+  const steps = 24, length = 3.3;
   const positions: number[] = [], colors: number[] = [], indices: number[] = [];
-  const c = new THREE.Color(), base = new THREE.Color("#264d24"), tip = new THREE.Color("#7aa346"), rib = new THREE.Color("#8c8a3e");
+  const c = new THREE.Color(), base = new THREE.Color("#36533a"), tip = new THREE.Color("#7c8b55");
+  const vertex = (x: number, y: number, z: number, shade: number) => {
+    positions.push(x, y, z);
+    c.copy(base).lerp(tip, shade); colors.push(c.r, c.g, c.b);
+  };
+  // A continuous narrow midrib, with separate curved leaflets instead of a zigzag sheet.
   for (let i = 0; i <= steps; i++) {
+    const t = i / steps, y = 1.15 * t - 2 * t * t, w = .024 * (1 - t) + .004;
+    vertex(-w, y, length * t, t * .45); vertex(w, y, length * t, t * .45);
+    if (i < steps) { const q = i * 2; indices.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+  }
+  for (let i = 2; i < steps; i++) {
     const t = i / steps, z = length * t, y = 1.15 * t - 2 * t * t;
-    // alternate long and short leaflets so the edge reads as feathered, not as a blade
-    const w = .72 * Math.sin(Math.PI * Math.min(1, t * 1.1 + .04)) * (i % 2 ? 1 : .45) * (t < .08 ? 0 : 1);
-    c.copy(base).lerp(tip, t * .9);
-    positions.push(0, y, z, -w, y - w * .42, z + w * .35, w, y - w * .42, z + w * .35);
-    colors.push(rib.r * .7, rib.g * .7, rib.b * .7, c.r, c.g, c.b, c.r, c.g, c.b);
-    if (i < steps) {
-      const s = i * 3;
-      indices.push(s + 1, s, s + 3, s + 1, s + 3, s + 4, s, s + 2, s + 5, s, s + 5, s + 3);
+    const span = .86 * Math.pow(Math.sin(Math.PI * t), .8) * (.94 + .06 * Math.sin(i * 2.7));
+    for (const side of [-1, 1]) {
+      const start = positions.length / 3;
+      for (let j = 0; j <= 3; j++) {
+        const u = j / 3;
+        const width = .052 * Math.sin(Math.PI * u) + .009 * (1 - u);
+        const x = side * span * u, yy = y - span * (.16 * u + .4 * u * u);
+        const zz = z + span * .32 * u + side * .012;
+        vertex(x, yy + width * .22, zz - width, .15 + t * .45 + u * .18);
+        vertex(x, yy - width * .22, zz + width, .08 + t * .45 + u * .18);
+        if (j < 3) { const q = start + j * 2; indices.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+      }
     }
   }
   const g = new THREE.BufferGeometry();
@@ -292,29 +301,106 @@ function Palm({ x, z, scale = 1, turn = 0 }: { x: number; z: number; scale?: num
     <mesh position={[0, .2, 0]} castShadow receiveShadow><cylinderGeometry args={[1.15, 1.25, .4, 20, 1, true]} /><meshStandardMaterial color="#9b9483" roughness={.95} side={THREE.DoubleSide} /></mesh>
     <mesh position={[0, .34, 0]} rotation-x={-Math.PI / 2} receiveShadow><circleGeometry args={[1.12, 20]} /><meshStandardMaterial color="#3f3122" roughness={1} /></mesh>
     {[0, 1, 2, 3, 4].map(i => <mesh key={i} position={[Math.cos(i * 1.26 + .4) * .68, .52 + (i % 2) * .08, Math.sin(i * 1.26 + .4) * .68]} scale={[1, .75, 1]} castShadow receiveShadow>
-      <icosahedronGeometry args={[.36 + (i % 3) * .06, 1]} />
-      <meshStandardMaterial color={["#2f5d2b", "#467a35", "#3a6a2f"][i % 3]} roughness={.85} flatShading />
+      <icosahedronGeometry args={[.36 + (i % 3) * .06, 2]} />
+      <meshStandardMaterial color={["#3c5738", "#536c43", "#47623c"][i % 3]} roughness={.95} />
     </mesh>)}
   </group>;
 }
 
-function Sign({ title, detail, color = INK, width = 6.1, day = true }: { title: string; detail: string; color?: string; width?: number; day?: boolean }) {
+/* Shared architectural materials: fine surface relief, rather than flat painted boxes. */
+function pavilionMaterials() {
+  const plaster = surface(256, (ctx, rand) => {
+    ctx.fillStyle = "#eeeae0"; ctx.fillRect(0, 0, 256, 256);
+    speckle(ctx, rand, 256, 6500, ["#dad5c9", "#fffaf0", "#e8e2d5"]);
+  });
+  const timber = surface(512, (ctx, rand) => {
+    ctx.fillStyle = "#a17b51"; ctx.fillRect(0, 0, 512, 512);
+    // Long, low-contrast fibres run down the battens, with a little natural wandering.
+    for (let i = 0; i < 620; i++) {
+      const x = rand() * 512;
+      ctx.strokeStyle = i % 3 ? "#61452d" : "#ddbd8a";
+      ctx.globalAlpha = .04 + rand() * .13;
+      ctx.lineWidth = .4 + rand() * 1.5;
+      ctx.beginPath(); ctx.moveTo(x, 0);
+      ctx.bezierCurveTo(x + 5, 170, x - 7, 340, x + 2, 512); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  });
+  const stone = surface(256, (ctx, rand) => {
+    ctx.fillStyle = "#c6beae"; ctx.fillRect(0, 0, 256, 256);
+    speckle(ctx, rand, 256, 8000, ["#a39b8c", "#eee5d4", "#c1b7a4"]);
+  });
+  const materials = {
+    plaster: new THREE.MeshStandardMaterial({ map: plaster, bumpMap: plaster, bumpScale: .018, roughness: .94 }),
+    timber: new THREE.MeshStandardMaterial({ map: timber, bumpMap: timber, bumpScale: .012, roughness: .7 }),
+    stone: new THREE.MeshStandardMaterial({ map: stone, bumpMap: stone, bumpScale: .025, roughness: .88 }),
+    metal: new THREE.MeshStandardMaterial({ color: "#394647", metalness: .75, roughness: .38 }),
+    roof: new THREE.MeshStandardMaterial({ color: "#85908a", metalness: .3, roughness: .68 }),
+    brass: new THREE.MeshStandardMaterial({ color: "#a28a64", metalness: .8, roughness: .36 }),
+  };
+  return { materials, textures: [plaster, timber, stone] };
+}
+
+type PavilionMaterials = ReturnType<typeof pavilionMaterials>["materials"];
+
+const BATTENS: [number, number, number][] = [-1, 1].flatMap(side =>
+  Array.from({ length: 5 }, (_, i): [number, number, number] => [side * (2.12 + i * .21), 2.12, -1.97])
+);
+const ROOF_SEAMS: [number, number, number][] = Array.from({ length: 11 }, (_, i) => [-3.35 + i * .67, 4.565, -.4]);
+
+/** Repeated joinery shares one draw call per pavilion instead of one per strip. */
+function Joinery({ positions, size, material, castShadow = false }: {
+  positions: [number, number, number][];
+  size: [number, number, number];
+  material: THREE.Material;
+  castShadow?: boolean;
+}) {
+  const mesh = useRef<THREE.InstancedMesh>(null!);
+  useLayoutEffect(() => {
+    const matrix = new THREE.Matrix4();
+    positions.forEach((position, index) => mesh.current.setMatrixAt(index, matrix.makeTranslation(...position)));
+    mesh.current.instanceMatrix.needsUpdate = true;
+    mesh.current.computeBoundingSphere();
+  }, [positions]);
+  return <instancedMesh ref={mesh} args={[undefined, undefined, positions.length]} material={material} castShadow={castShadow} receiveShadow>
+    <boxGeometry args={size} />
+  </instancedMesh>;
+}
+
+function Sign({ title, day, materials }: { title: string; day: boolean; materials: PavilionMaterials }) {
   const map = useMemo(() => {
-    const canvas = document.createElement("canvas"); canvas.width = 1536; canvas.height = 480;
+    const canvas = document.createElement("canvas"); canvas.width = 2048; canvas.height = 350;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = day ? "#f2eee3" : "#1c2b2f"; ctx.fillRect(0, 0, 1536, 480);
-    ctx.fillStyle = day ? color : "#dce9e8";
-    let size = 158;
-    do { ctx.font = `700 ${size}px ${game.fonts.display}`; size -= 4; } while (ctx.measureText(title).width > 1390 && size > 62);
-    ctx.fillText(title, 70, 208);
-    ctx.font = `400 53px ${game.fonts.body}`;
-    ctx.fillStyle = day ? "#4b6363" : "#8fa7a6";
-    ctx.fillText(detail, 74, 340, 1360);
-    const t = new THREE.CanvasTexture(canvas); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    ctx.fillStyle = "#263b3c"; ctx.fillRect(0, 0, 2048, 350);
+    ctx.fillStyle = "#ede4d1";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    let size = 284;
+    ctx.font = `600 ${size}px ${game.fonts.body}`;
+    let metrics = ctx.measureText(title);
+    while ((metrics.width > 1820 || metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent > 270) && size > 140) {
+      size -= 4; ctx.font = `600 ${size}px ${game.fonts.body}`;
+      metrics = ctx.measureText(title);
+    }
+    // Centre the actual glyphs, including Vietnamese accents, rather than the font's line box.
+    ctx.fillText(title, 1024, (350 + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 16;
     return t;
-  }, [title, detail, color, day]);
+  }, [title]);
   useEffect(() => () => map.dispose(), [map]);
-  return <mesh position={[0, 3.55, 1.22]}><planeGeometry args={[width, width / 3.2]} /><meshBasicMaterial map={map} toneMapped={false} /></mesh>;
+  return <group position={[0, 3.84, 2.12]} rotation-x={-.12}>
+    {/* A shallow fascia below the eave; lettering stays below the bloom threshold. */}
+    <RoundedBox args={[6.72, 1.25, .13]} radius={.035} material={materials.timber} castShadow />
+    <mesh position-z={.078}>
+      <planeGeometry args={[6.5, 1.11]} />
+      <meshBasicMaterial map={map} color={day ? "#ffffff" : "#d2d5d0"} toneMapped={false} />
+    </mesh>
+    {[-3.29, 3.29].flatMap(x => [-.55, .55].map(y => <mesh key={`${x}:${y}`} position={[x, y, .085]} rotation-x={Math.PI / 2} material={materials.metal}>
+      <cylinderGeometry args={[.018, .018, .012, 8]} />
+    </mesh>))}
+  </group>;
 }
 
 function ProjectObject({ station, color }: { station: Station; color: string }) {
@@ -346,28 +432,53 @@ function ProjectObject({ station, color }: { station: Station; color: string }) 
   </group>;
 }
 
-function Pavilion({ station, index, lang, day }: { station: Station; index: number; lang: Lang; day: boolean }) {
+function Pavilion({ station, index, lang, day, materials }: { station: Station; index: number; lang: Lang; day: boolean; materials: PavilionMaterials }) {
   const color = accents[index];
-  const detail = station.project ? station.project.tags.slice(0, 3).join(" · ") : station.kind === "about" ? "Full-Stack Developer" : station.kind === "skills" ? "Web · AI · IoT" : station.kind === "contact" ? "Email · GitHub" : "GitHub";
   const ring = useRef<THREE.MeshBasicMaterial>(null!);
-  useFrame(() => { ring.current.opacity = game.active === index ? .95 : .3; });
+  const light = useRef<THREE.SpotLight>(null!);
+  const lightTarget = useRef<THREE.Object3D>(null!);
+  useEffect(() => { light.current.target = lightTarget.current; }, []);
+  useFrame(() => { ring.current.opacity = game.active === index ? .65 : .12; });
   const prop = propSpot(station);
-  const sand = sandTone(day);
   return <>
     <group position={[station.x, 0, station.z]} rotation-y={station.rot} onClick={(e) => { e.stopPropagation(); driveTo(index); }}>
-      <RoundedBox args={[7.3, .35, 4.5]} radius={.16} position={[0, .16, -.7]} receiveShadow castShadow><meshStandardMaterial color={sand} roughness={.85} /></RoundedBox>
-      <mesh position={[0, 1.9, -2.15]} castShadow receiveShadow><boxGeometry args={[6.8, 3.5, .24]} /><meshStandardMaterial color={color} roughness={.8} /></mesh>
-      {[-3.22, 3.22].map(x => <mesh key={x} position={[x, 2, -.4]} castShadow><boxGeometry args={[.35, 3.75, 3.9]} /><meshStandardMaterial color={sand} roughness={.8} /></mesh>)}
-      <RoundedBox args={[7.25, .32, 4.3]} radius={.15} position={[0, 4.15, -.4]} castShadow><meshStandardMaterial color={sand} roughness={.8} /></RoundedBox>
-      <mesh position={[0, 3.56, 1.12]} castShadow><boxGeometry args={[6.8, 1.95, .16]} /><meshStandardMaterial color={day ? "#f2eee3" : "#16262b"} /></mesh>
-      <Sign title={stationShort(station, lang)} detail={detail} day={day} />
-      <mesh position={[0, 2.47, 1.23]}><boxGeometry args={[6.45, .045, .06]} /><meshBasicMaterial color={day ? color : "#ffc687"} toneMapped={day} /></mesh>
-      <group position={[0, .34, -.5]}><ProjectObject station={station} color={color} /></group>
-      {station.kind === "project" && <mesh position={[0, .4, .35]} rotation-x={-Math.PI / 2}><planeGeometry args={[5.8, 2.5]} /><meshStandardMaterial color={color} roughness={1} /></mesh>}
+      {/* A shallow stone step and a raised floor give the walls a convincing footing. */}
+      <RoundedBox args={[7.5, .16, 4.8]} radius={.045} position={[0, .08, -.65]} material={materials.stone} receiveShadow castShadow />
+      <RoundedBox args={[7.12, .22, 4.3]} radius={.04} position={[0, .25, -.8]} material={materials.stone} receiveShadow castShadow />
+      <mesh position={[0, 2.32, -2.15]} castShadow receiveShadow>
+        <boxGeometry args={[6.8, 3.92, .24]} />
+        <meshStandardMaterial color={color} map={materials.plaster.map} bumpMap={materials.plaster.bumpMap} bumpScale={.018} roughness={.92} />
+      </mesh>
+      {[-3.28, 3.28].map(x => <group key={x}>
+        <mesh position={[x, 2.32, -.4]} material={materials.plaster} castShadow receiveShadow><boxGeometry args={[.24, 3.92, 3.7]} /></mesh>
+        <mesh position={[x, 2.36, 1.48]} material={materials.metal} castShadow><boxGeometry args={[.16, 4, .16]} /></mesh>
+        <mesh position={[x, .41, 1.48]} material={materials.metal}><boxGeometry args={[.3, .1, .3]} /></mesh>
+        <mesh position={[x, 4.25, 1.9]} material={materials.metal} castShadow><boxGeometry args={[.12, .14, .9]} /></mesh>
+      </group>)}
+      {/* Cedar battens at either side of the exhibit, with real gaps and depth. */}
+      <Joinery positions={BATTENS} size={[.16, 3.5, .12]} material={materials.timber} castShadow />
+      <mesh position={[0, .68, -1.97]} material={materials.timber} receiveShadow><boxGeometry args={[6.25, .58, .1]} /></mesh>
+      <mesh position={[0, 4.3, -.4]} material={materials.timber} receiveShadow><boxGeometry args={[6.5, .12, 3.85]} /></mesh>
+      {/* Thin standing-seam metal canopy, capped edges, and a rear rainwater pipe. */}
+      <RoundedBox args={[7.45, .16, 4.5]} radius={.045} position={[0, 4.48, -.4]} material={materials.roof} castShadow receiveShadow />
+      <Joinery positions={ROOF_SEAMS} size={[.018, .025, 4.46]} material={materials.roof} />
+      {[-3.7, 3.7].map(x => <mesh key={x} position={[x, 4.46, -.4]} material={materials.roof}><boxGeometry args={[.035, .1, 4.5]} /></mesh>)}
+      <mesh position={[3.35, 2.24, -2.35]} material={materials.metal} castShadow><cylinderGeometry args={[.065, .065, 4.16, 10]} /></mesh>
+      <Sign title={stationSign(station, lang)} day={day} materials={materials} />
+      <RoundedBox args={[3.3, .28, 1.75]} radius={.065} position={[0, .5, -.45]} material={materials.stone} receiveShadow castShadow />
+      <mesh position={[0, .66, -.45]} material={materials.stone}><boxGeometry args={[3.16, .04, 1.62]} /></mesh>
+      <group position={[0, .69, -.5]}><ProjectObject station={station} color={color} /></group>
+      {/* A real downlight illuminates the object and the timber, with no extra shadow-map pass. */}
+      <mesh position={[0, 3.1, 1.65]} material={materials.metal}><boxGeometry args={[2.8, .1, .22]} /></mesh>
+      <mesh position={[0, 3.04, 1.65]} rotation-x={Math.PI / 2}>
+        <planeGeometry args={[2.65, .14]} /><meshBasicMaterial color={day ? "#c6c5b8" : "#bba78b"} toneMapped={false} />
+      </mesh>
+      <spotLight ref={light} position={[0, 3.04, 1.55]} color="#ffe7c2" intensity={day ? 5 : 12} distance={6} angle={.9} penumbra={1} decay={2} />
+      <object3D ref={lightTarget} position={[0, .85, -.8]} />
     </group>
     <group position={[prop.x, 0, prop.z]}><Palm x={0} z={0} scale={.72} turn={index} /></group>
     <mesh position={[station.px, .043, station.pz]} rotation-x={-Math.PI / 2}>
-      <ringGeometry args={[1.9, 2.05, 48]} /><meshBasicMaterial ref={ring} color={day ? "#b66037" : "#f5b573"} transparent depthWrite={false} />
+      <ringGeometry args={[1.96, 2.015, 64]} /><meshBasicMaterial ref={ring} color={day ? "#947d5d" : "#d0bb95"} transparent depthWrite={false} />
     </mesh>
   </>;
 }
@@ -410,13 +521,23 @@ const ROAD = (() => {
   return { curve, left, right, half, length: curve.getLength(), inner: leftInside ? left : right, side: leftInside ? -1 : 1 };
 })();
 
-/* street lamps stand on the outer verge, arm reaching out over the asphalt */
-const LAMPS = Array.from({ length: 14 }, (_, i) => {
+/* Put a lamp beside each frontage, rather than letting a post cross its lettering. */
+const FRONTAGE_LAMPS = stations.slice(1).map(station => {
+  const nx = Math.sin(station.rot), nz = Math.cos(station.rot);
+  return {
+    x: station.x + nz * 4.05 + nx * 2.4,
+    z: station.z - nx * 4.05 + nz * 2.4,
+    face: station.rot,
+  };
+});
+/* The rest follow the empty stretches of the loop, away from the pavilion faces. */
+const LOOP_LAMPS = Array.from({ length: 14 }, (_, i) => {
   const t = (i + .5) / 14, p = ROAD.curve.getPointAt(t), d = ROAD.curve.getTangentAt(t);
   const nx = -d.z * ROAD.side, nz = d.x * ROAD.side; // from the road out to its verge
   const off = ROAD.half + .7;
   return { x: p.x + nx * off, z: p.z + nz * off, face: Math.atan2(-nx, -nz) };
-});
+}).filter(lamp => stations.slice(1).every(station => Math.hypot(lamp.x - station.x, lamp.z - station.z) > 10));
+const LAMPS = [...FRONTAGE_LAMPS, ...LOOP_LAMPS];
 // the car should go round a lamp post, not through it
 obstacles.push(...LAMPS.map(l => ({ x: l.x, z: l.z, r: .3 })));
 
@@ -449,8 +570,8 @@ function StreetLamps({ day }: { day: boolean }) {
     level.current = THREE.MathUtils.damp(level.current, day ? 0 : 1, 3, dt);
     const k = level.current;
     bulb.color.setRGB(.75, .72, .66).lerp(BULB_ON, k);
-    glow.opacity = k * .55;
-    lights.current.forEach(l => { if (l) l.intensity = k * 26; });
+    glow.opacity = k * .2;
+    lights.current.forEach(l => { if (l) l.intensity = k * 18; });
   });
   return <>
     {LAMPS.map((l, i) => <group key={i} position={[l.x, 0, l.z]} rotation-y={l.face}>
@@ -459,7 +580,7 @@ function StreetLamps({ day }: { day: boolean }) {
       <mesh position={[0, 4.45, .7]} rotation-x={Math.PI / 2} material={iron} castShadow><cylinderGeometry args={[.045, .045, 1.45, 8]} /></mesh>
       <mesh position={[0, 4.42, 1.45]} material={iron} castShadow><boxGeometry args={[.36, .14, .7]} /></mesh>
       <mesh position={[0, 4.34, 1.45]} scale={[.8, .35, 1.4]} material={bulb}><sphereGeometry args={[.22, 14, 8]} /></mesh>
-      <mesh position={[0, .06, 1.45]} rotation-x={-Math.PI / 2} material={glow} renderOrder={2}><planeGeometry args={[9, 9]} /></mesh>
+      <mesh position={[0, .06, 1.45]} rotation-x={-Math.PI / 2} material={glow} renderOrder={2}><planeGeometry args={[7, 7]} /></mesh>
       {i % 2 === 0 && <pointLight ref={el => { lights.current[i] = el; }} position={[0, 4.1, 1.45]} color="#ffc48a" intensity={0} distance={15} decay={1.6} />}
     </group>)}
   </>;
@@ -508,8 +629,8 @@ function Promenade({ day }: { day: boolean }) {
   };
   return <>
     <mesh geometry={platform} material={materials} receiveShadow castShadow onPointerDown={drive} />
-    <mesh geometry={road.green} position-y={.018} receiveShadow onPointerDown={drive}><meshStandardMaterial map={textures.lawn} color={day ? "#bfc8ad" : "#a9bdb2"} roughness={1} /></mesh>
-    <mesh geometry={road.geometry} receiveShadow onPointerDown={drive}><meshStandardMaterial map={textures.asphalt} color={day ? "#e8e8e8" : "#c3cbcf"} roughness={.88} side={THREE.DoubleSide} /></mesh>
+    <mesh geometry={road.green} position-y={.018} receiveShadow onPointerDown={drive}><meshStandardMaterial map={textures.lawn} bumpMap={textures.lawn} bumpScale={.035} color={day ? "#c8cdbb" : "#b4c1b5"} roughness={1} /></mesh>
+    <mesh geometry={road.geometry} receiveShadow onPointerDown={drive}><meshStandardMaterial map={textures.asphalt} bumpMap={textures.asphalt} bumpScale={.012} color={day ? "#e8e8e8" : "#c3cbcf"} roughness={.94} side={THREE.DoubleSide} /></mesh>
     {Array.from({ length: 68 }, (_, i) => {
       const p = road.curve.getPoint(i / 68), d = road.curve.getTangent(i / 68);
       return <mesh key={i} position={[p.x, .036, p.z]} rotation={[-Math.PI / 2, 0, -Math.atan2(d.x, d.z)]} receiveShadow>
@@ -539,11 +660,16 @@ const BOULDERS = Array.from({ length: 34 }, (_, i) => {
 });
 
 export default function Coast({ lang, day }: { lang: Lang; day: boolean }) {
+  const architecture = useMemo(pavilionMaterials, []);
+  useEffect(() => () => {
+    Object.values(architecture.materials).forEach(material => material.dispose());
+    architecture.textures.forEach(texture => texture.dispose());
+  }, [architecture]);
   return <>
     <Ocean day={day} />
     <Promenade day={day} />
     <StreetLamps day={day} />
-    {stations.slice(1).map((s, i) => <Pavilion key={s.id} station={s} index={i + 1} lang={lang} day={day} />)}
+    {stations.slice(1).map((s, i) => <Pavilion key={s.id} station={s} index={i + 1} lang={lang} day={day} materials={architecture.materials} />)}
     {[[-36, 5], [-34, -7], [-38, -27], [35, 3], [38, -13], [31, -31], [-21, -35], [18, -36]].map(([x, z], i) => <Palm key={i} x={x} z={z} scale={1 + (i % 3) * .12} turn={i * 2} />)}
     {BOULDERS.map(({ color, ...b }, i) => <mesh key={i} {...b} castShadow receiveShadow>
       <dodecahedronGeometry args={[1, 1]} /><meshStandardMaterial color={color} roughness={1} flatShading />
